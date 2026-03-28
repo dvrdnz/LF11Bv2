@@ -142,3 +142,80 @@ Poll interval: 32s (min: 32s; max 34min 8s)
 
 `Packet count: 1` und `Server: 192.168.10.2` bestätigen: der Client synchronisiert die Zeit erfolgreich über pfSense.
 > Der Wert für `Offset: +7.493693s` wirkt erstmal ungewöhnlich hoch (beim ersten Sync normal) und sollte nach kurzer Zeit sich auf viel niedrigere Werte wie `Offset: +39us` einpegeln 
+
+---
+
+### Schritt 6 – NTP-Validierung auf allen VMs
+
+Alle verbleibenden Systeme werden auf pfSense als NTP-Quelle umgestellt und validiert.
+
+#### Proxmox
+
+```bash
+nano /etc/chrony/chrony.conf
+```
+Auskommentieren:
+```
+pool 2.debian.pool.ntp.org.iburst
+```
+
+Eintragen:
+
+```
+server pfsense.example.internal iburst
+```
+
+
+![/etc/chrony/chrony.conf – Proxmox](/images/img_42.png)
+
+```bash
+systemctl restart chronyd
+chronyc tracking
+```
+
+![chronyc tracking – Proxmox](/images/img_43.png)
+
+---
+
+#### SRV2
+
+```bash
+nano /etc/systemd/timesyncd.conf   
+```
+![/etc/ntp.conf – TrueNAS](/images/img_47.png)
+> NTP= auskommementiren und pfsense.example.internal eintragen
+```
+timedatectl timesync-status
+```
+
+![timedatectl timesync-status – SRV2](/images/img_44.png)
+
+---
+
+#### TrueNAS
+
+```bash
+nano /etc/ntp.conf
+```
+![/etc/ntp.conf – TrueNAS](/images/img_45.png)
+
+> Unter Beibehaltung der TrueNAS-Standardvorgaben (restrict default ignore) wurden lediglich die FreeBSD-Server durch pfsense.example.internal ersetzt. Die restrict-Regel erlaubt diesem Host den Zeitabgleich, schließt aber administrative Eingriffe über nomodify und noquery aus. Lokale Standard-Referenzen auf 127.0.0.1 und die Systemuhr bleiben als Fallback aktiv, während die alten Pool-Einträge deaktiviert sind. 
+
+
+
+```bash
+service ntpd restart
+ntpq -p
+```
+
+![ntpq -p – TrueNAS](/images/img_46.png)
+
+```
+     remote           refid      st t when poll reach   delay   offset  jitter
+=============================================================================
+*pfSense.  .int  217.144.138.234  3 u    2   64    1   0.574  +18.163   1.280
+```
+
+
+
+`*` vor `pfSense` bestätigt: TrueNAS synchronisiert aktiv über pfSense.
