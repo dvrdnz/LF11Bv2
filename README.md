@@ -1,6 +1,7 @@
 # LF11Bv2 – Betrieb und Sicherheit vernetzter Systeme gewährleisten
 
-> Fortsetzung von [LF10Bv2](https://github.com/dvrdnz/LF10Bv2)
+> **🔗 Ausgangsbasis**: Dieses Projekt ist die Fortsetzung von [LF10Bv2](https://github.com/dvrdnz/LF10Bv2/tree/main)
+
 
 ## Ausgangslage
 
