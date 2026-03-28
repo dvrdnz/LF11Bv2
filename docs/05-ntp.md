@@ -112,6 +112,7 @@ Packet count: 0
 
 ![Firewall-Regel NTP](/images/img_40.png)
 
+> `This Firewall (self)` begrenzt die Regel auf Traffic, der pfSense selbst als Endpunkt adressiert – nicht einen Host dahinter. `any` würde auch NTP-Traffic zu anderen Zielen durchlassen.
 ---
 
 ### Schritt 5 – Funktionsnachweis
