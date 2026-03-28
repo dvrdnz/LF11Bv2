@@ -141,3 +141,4 @@ Poll interval: 32s (min: 32s; max 34min 8s)
 ![timedatectl timesync-status – Erfolg](/images/img_41.png)
 
 `Packet count: 1` und `Server: 192.168.10.2` bestätigen: der Client synchronisiert die Zeit erfolgreich über pfSense.
+> Der Wert für `Offset: +7.493693s` wirkt erstmal ungewöhnlich hoch (beim ersten Sync normal) und sollte nach kurzer Zeit sich auf viel niedrigere Werte wie `Offset: +39us` einpegeln 
