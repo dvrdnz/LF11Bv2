@@ -76,12 +76,14 @@ Physical Host (Remote Lab – Windows Server 2019 Datacenter)
 
 ## Kapitel
 
-- [`00-pfsense.md`](00-pfsense.md) – VM-Setup, Netzwerkkonfiguration, System-Update
-- [`01-firewall.md`](01-firewall.md) – iptables → pfSense Firewall & NAT (inkl. RDP-Portforward)
-- [`02-dhcp.md`](02-dhcp.md) – Kea DHCP (SRV1) → DHCP Server in pfSense
-- [`03-dns.md`](03-dns.md) – bind9 (SRV1) → DNS Resolver (Unbound) in pfSense
-- [`04-proxmox.md`](04-proxmox.md) – Gateway-Umstellung Proxmox & SRV2, Legacy-Abschaltung (SRV1, Debian Router)
-- [`05-ntp.md`](05-ntp.md) – Chrony ablösen, NTP über pfSense
+- [`00-pfsense.md`](docs/00-pfsense.md) – VM-Setup, Netzwerkkonfiguration, System-Update
+- [`01-firewall.md`](docs/01-firewall.md) – iptables → pfSense Firewall & NAT (inkl. RDP-Portforward)
+- [`02-dhcp.md`](docs/02-dhcp.md) – Kea DHCP (SRV1) → DHCP Server in pfSense
+- [`03-dns.md`](docs/03-dns.md) – bind9 (SRV1) → DNS Resolver (Unbound) in pfSense
+- [`04-proxmox.md`](docs/04-proxmox.md) – Gateway-Umstellung Proxmox & SRV2, Legacy-Abschaltung (SRV1, Debian Router)
+- [`05-ntp.md`](docs/05-ntp.md) – Chrony ablösen, NTP über pfSense
+
+- [`images/`](images/) – Abbildungen und Diagramme
 
 ---
 
