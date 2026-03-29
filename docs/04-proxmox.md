@@ -95,7 +95,7 @@ Host Override im DNS Resolver eingtragen:
 
 | Feld | Wert |
 | --- | --- |
-| Host | `proxmox` |
+| Host | `pve` |
 | Domain | `example.internal` |
 | IP Address | `192.168.10.12` |
 | Description | proxmox |
