@@ -4,11 +4,11 @@
 
 Ab pfSense 2.8.x ist **Kea DHCP** der neue Standard-Backend. ISC DHCP gilt als deprecated und wird in einer zukünftigen Version entfernt. Das Backend wird unter **System → Advanced → Networking → DHCP Options → Server Backend** gewählt.
 
-![ISC DHCP Deprecation Warning](/images/img_21.png)
+![ISC DHCP Deprecation Warning](../images/img_21.png)
 
 
 
-![System → Advanced → Networking – Kea DHCP ausgewählt](/images/img_22.png)
+![System → Advanced → Networking – Kea DHCP ausgewählt](../images/img_22.png)
 
 Da im Lab auf **pfSense 2.8.1** aktualisiert wurde und Kea DHCP bereits aus LF10B (SRV1) bekannt ist, wird Kea als Backend verwendet – konsistent zum bisherigen Stack.
 
@@ -138,7 +138,7 @@ Services → DHCP Server → LAN
 
 Unter **Status → DHCP Leases** ist der aktive Lease einsehbar.
 
-![DHCP Leases mint-machine](/images/img_23.png)
+![DHCP Leases mint-machine](../images/img_23.png)
 
 >mint-machine` erhielt `192.168.10.12` aus dem Pool `.11–.245`. Lease-Utilization: 1 von 235.
 
@@ -150,7 +150,7 @@ Nach der ersten DHCP-Zuweisung erhieltmint-machine` dynamisch `192.168.10.12`. D
 
 **Schritt 1:** Beim Lease auf **+** klicken – pfSense übernimmt MAC-Adresse und Hostname automatisch ins Static-Mapping-Formular.
 
-![DHCP Leases mint-machine, + Action](/images/img_24.png)
+![DHCP Leases mint-machine, + Action](../images/img_24.png)
 
 **Schritt 2:** IP-Adresse außerhalb des Pools eintragen. Da der Pool `192.168.10.11–192.168.10.245` ist, wird eine IP aus außerhalb des Pools (unterhalb von .11) gewählt: .10 – wird nicht dynamisch vergeben und deshalb gewählt: **`192.168.10.10`**
 
@@ -163,7 +163,7 @@ Auf dem Host (mint-machine):
 sudo dhclient -r && sudo dhclient
 ````
 Rückversichern:
-![RDP Port-Forward – Redirect Target angepasst](/images/img_27.png)
+![RDP Port-Forward – Redirect Target angepasst](../images/img_27.png)
 
 Gebenenfalls **Clear All DHCP Leases** klicken und dann unter **Diagnostics -> ARP Table** den veraltenten Eintrag manuell entfernen.
 
@@ -171,9 +171,9 @@ Gebenenfalls **Clear All DHCP Leases** klicken und dann unter **Diagnostics -> A
 
 Firewall → NAT → Port Forward → Regel bearbeiten → **Redirect target IP: `192.168.10.10`**
 
-![RDP](/images/img_26.png)
+![RDP](../images/img_26.png)
 
-![RDP Port-Forward – Redirect Target angepasst](/images/img_25.png)
+![RDP Port-Forward – Redirect Target angepasst](../images/img_25.png)
 
 → **Save** → **Apply Changes**
 

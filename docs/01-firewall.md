@@ -21,7 +21,7 @@ Da pfSense standardmäßig stateful ist, müssen keine expliziten Rückrichtungs
 
 Über **Firewall** in der Navigationsleiste sind u.a. folgende Bereiche erreichbar:
 
-![Firewall](/images/img_04.png)
+![Firewall](../images/img_04.png)
 
 #### Firewall → Rules
 
@@ -31,10 +31,10 @@ Paketfilter-Regeln pro Interface. Die Tabs **WAN** und **LAN** sind für diesen 
 - **LAN**: Regeln für Traffic aus dem internen Netz. Hier wird definiert, was LAN-Clients dürfen (HTTP, HTTPS, DNS, ICMP).
 - **Floating**: Interface-übergreifende Regeln – für diesen Use Case nicht benötigt.
 
-![Firewall NAT](/images/img_01.png)
+![Firewall NAT](../images/img_01.png)
 >*Block bogon networks (Source: Reserved / Not assigned by IANA) – blockiert nicht öffentlich geroutete IP-Bereiche. Schutz vor gefälschten Quelladressen.*
 
-![Firewall NAT](/images/img_02.png)
+![Firewall NAT](../images/img_02.png)
 > *Anti-Lockout Rule: Zugriff auf WebConfigurator (80/443) immer erlaubt, kann nicht gelöscht werden. Default allow LAN to any (IPv4+IPv6): permissive Grundregel – erlaubt allen LAN-Clients uneingeschränkten Zugriff.*
 
 #### Firewall → NAT
@@ -44,12 +44,12 @@ Adressübersetzung. Zwei Bereiche sind für diesen Use Case relevant:
 **Port Forward** – DNAT: Eingehender Traffic auf einen internen Host weiterleiten (hier: RDP → 192.168.10.50).
 pfSense legt beim Erstellen einer Port-Forward-Regel automatisch eine passende Filter-Regel an (*Associated Filter Rule*) – diese muss nicht separat erstellt werden.
 
-![Firewall NAT](/images/img_03.png)
+![Firewall NAT](../images/img_03.png)
 
 **Outbound** – Masquerading: LAN-Traffic über das WAN-Interface übersetzen.
 Standardmäßig ist *Automatic Outbound NAT* aktiv – pfSense führt automatisch Masquerading durch. Keine manuelle Regel nötig.
 
-![Firewall Outbound](/images/img_05.png)
+![Firewall Outbound](../images/img_05.png)
 
 #### Status → System Logs → Firewall
 
@@ -59,7 +59,7 @@ Spalten: Action (Pass/Block), Time, Interface, Rule, Source, Destination, Protoc
 
 Geblockte Pakete ohne passende Erlaubnis-Regel erscheinen hier mit der Regel **Default deny rule IPv4/IPv6** – das bestätigt, dass das implizite Deny aktiv ist und greift.
 
-![Firewall Outbound](/images/img_06.png)
+![Firewall Outbound](../images/img_06.png)
 
 > Alle nicht explizit erlaubten eingehenden Verbindungen auf WAN werden als Default deny rule IPv4/IPv6 geloggt.
 
@@ -79,7 +79,7 @@ iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 **pfSense:**
 Firewall → NAT → Outbound → Modus: *Automatic Outbound NAT* – bereits aktiv, keine Aktion nötig.
 
-![Firewall Outbound](/images/img_07.png)
+![Firewall Outbound](../images/img_07.png)
 
 > Outbound NAT im Automatic-Modus – pfSense führt automatisch Masquerading für den gesamten LAN-Traffic über das WAN-Interface durch.
 ---
@@ -106,7 +106,7 @@ Diese müssen gelöscht werden: Firewall → Rules → LAN → beide Regeln mark
 
 Nach dem Löschen erscheint ein gelber Hinweisbalken: *„The firewall rule configuration has been changed. The changes must be applied for them to take effect."* – erst nach Klick auf **Apply Changes** sind die Regeln aktiv entfernt.
 
-> ![Firewall Outbound](/images/img_08.png)
+> ![Firewall Outbound](../images/img_08.png)
 > *LAN-Regelliste nach dem Löschen – nur noch Anti-Lockout Rule, Apply-Changes-Banner sichtbar.*
 
 ---
@@ -124,7 +124,7 @@ iptables -A FORWARD -i eth1 -o eth0 -p tcp --dport 443 -j ACCEPT
 
 **Schritt 1:** Firewall → Aliases → Ports → **Add**
 
-![Firewall Outbound](/images/img_09.png) 
+![Firewall Outbound](../images/img_09.png) 
 
 
 
@@ -147,7 +147,7 @@ Dann **+ Add Port** klicken und zweiten Eintrag ergänzen:
 
 → **Save** → **Apply Changes**
 
-![Firewall Outbound](/images/img_10.png) 
+![Firewall Outbound](../images/img_10.png) 
 
 **Schritt 2:** Firewall → Rules → LAN → **↑ Add**
 
@@ -168,9 +168,9 @@ Dann **+ Add Port** klicken und zweiten Eintrag ergänzen:
 
 → **Save** → **Apply Changes**
 
-![Regelformular ausgefüllt](/images/img_12.png)
+![Regelformular ausgefüllt](../images/img_12.png)
 
-![Fertige Regel in der LAN-Regelliste](/images/img_13.png)
+![Fertige Regel in der LAN-Regelliste](../images/img_13.png)
 
 ---
 
@@ -199,7 +199,7 @@ Firewall → Rules → LAN → **↑ Add**
 
 → **Save** → **Apply Changes**
 
-![DNS-Regel Destination Port Range](/images/img_14.png)
+![DNS-Regel Destination Port Range](../images/img_14.png)
 
 ---
 
@@ -229,11 +229,11 @@ Firewall → Rules → LAN → **↑ Add**
 
 > Restriktiver als `any` – entspricht exakt dem iptables `--icmp-type echo-request`. Für Diagnosezwecke ausreichend.
 
-![ICMP-Regelformular](/images/img_15.png)
+![ICMP-Regelformular](../images/img_15.png)
 
 ---
 
-![LAN-Regelliste – Gesamtübersicht](/images/img_16.png)
+![LAN-Regelliste – Gesamtübersicht](../images/img_16.png)
 
 > *Finaler Stand der LAN-Regelliste: Anti-Lockout Rule, ICMP Echo, DNS und HTTP_HTTPS aktiv.*
 
@@ -265,7 +265,7 @@ Firewall → NAT → Port Forward → **↑ Add**
 
 Die zugehörige Filter-Regel wird von pfSense automatisch angelegt.
 
-![RDP Port-Forward Formular ausgefüllt](/images/img_17.png)
+![RDP Port-Forward Formular ausgefüllt](../images/img_17.png)
 
 
 ---

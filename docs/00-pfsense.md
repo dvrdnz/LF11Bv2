@@ -41,7 +41,7 @@ WebConfigurator: `https://192.168.10.2/`
 
 Erreichbar unter `https://192.168.10.2/` – Zertifikatswarnung erscheint (selbstsigniert, erwartet).
 
-![pfSense Dashboard – System Information](/images/img_19.png)
+![pfSense Dashboard – System Information](../images/img_19.png)
 
 ---
 
@@ -65,7 +65,7 @@ Systeminformationen nach Update:
 | Build      | built on Mon Dec 15 18:31:00 CET 2025                             |
 
 
-![System Update – Confirmation](/images/img_20.png)
+![System Update – Confirmation](../images/img_20.png)
 
 ---
 
@@ -76,6 +76,6 @@ Falls im Dashboard **keine Update-Empfehlung** erscheint, hat pfSense möglicher
 **Interfaces → WAN → IPv4 Configuration Type: DHCP**
 
 
-![WAN Interface – IPv4 Configuration Type DHCP](/images/img_18.png)
+![WAN Interface – IPv4 Configuration Type DHCP](../images/img_18.png)
 
 ---

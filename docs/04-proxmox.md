@@ -184,7 +184,7 @@ Prüfen:
 ```bash
 sudo nslookup google.com pfsense.exapmle.internal
 ```
-![Gateway-Umstellung SRV2](/images/img_33.png)
+![Gateway-Umstellung SRV2](../images/img_33.png)
 
 
 
@@ -212,7 +212,7 @@ Restarting network: ok
 Restarting routing: ok
 ```
 
-![Netzwerkinterface zurücksetzen](/images/img_35.png)
+![Netzwerkinterface zurücksetzen](../images/img_35.png)
 
 #### 6.2 – Standard-Gateway setzen
 
@@ -226,7 +226,7 @@ Configure IPv6 Default Route? (y/n) n
 Restarting routing: ok
 ```
 
-![Standard-Gateway setzen](/images/img_37.png)
+![Standard-Gateway setzen](../images/img_37.png)
 
 #### 6.3 – DNS-Server setzen
 
@@ -240,7 +240,7 @@ Saving DNS configuration: ok
 Reloading network config: ok
 ```
 
-![DNS-Server setzen](/images/img_36.png)
+![DNS-Server setzen](../images/img_36.png)
 
 Nach diesen drei Schritten verwendet TrueNAS als Gateway und DNS-Server jeweils `192.168.10.2` (pfSense) – analog zur Umstellung von Proxmox und SRV2.
 
@@ -260,7 +260,7 @@ Da SRV2 einen Reverse Proxy betreibt, bekommt jeder Dienst einen eigenen DNS-Ein
 
 Jeden Eintrag einzeln anlegen: → **Save** → abschließend **Apply Changes**
 
-![Host Overrides pfSense](/images/img_34.png)
+![Host Overrides pfSense](../images/img_34.png)
 
 ---
 

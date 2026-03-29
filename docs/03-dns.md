@@ -50,7 +50,7 @@ Hier wird festgelegt, über welches Interface Unbound Anfragen **nach außen** s
 
 → **Save → Apply Changes**
 
-![DNS Resolver General Settings – Enable, Network Interfaces, Outgoing Interfaces](images/img_29.png)
+![DNS Resolver General Settings – Enable, Network Interfaces, Outgoing Interfaces](../images/img_29.png)
 
 ---
 
@@ -79,7 +79,7 @@ Die Upstream-Server sind unter **System → General Setup → DNS Servers** bere
 
 → **Save → Apply Changes**
 
-![Forwarding Mode aktiviert – Host Overrides Bereich noch leer](images/img_28.png)
+![Forwarding Mode aktiviert – Host Overrides Bereich noch leer](../images/img_28.png)
 
 ---
 
@@ -101,7 +101,7 @@ Ein Host Override besteht aus genau drei Pflichtfeldern:
 > - Domain: `example.internal`
 > - IP Address: `192.168.10.2`
 
-![Edit Host Override – Formularfelder](images/img_30.png)
+![Edit Host Override – Formularfelder](../images/img_30.png)
 
 #### Einzutragende Hosts
 
@@ -119,7 +119,7 @@ Ein Host Override besteht aus genau drei Pflichtfeldern:
 
 > Sobald weitere Dienste hinzukommen (Proxmox, NAS etc.), werden hier entsprechende Einträge ergänzt.
 
-![Edit Host Override – Formularfelder](images/img_31.png)
+![Edit Host Override – Formularfelder](../images/img_31.png)
 
 ---
 
@@ -148,7 +148,7 @@ Der **Server** in der Ausgabe muss `192.168.10.2` sein – das beweist, dass der
 $ nslookup googel.com pfsense.example.internal
 ```
 
-![Edit Host Override – Formularfelder](images/img_32.png)
+![Edit Host Override – Formularfelder](../images/img_32.png)
 
 > nslookup google.com pfsense.example.internal verfiziert zwei unabhängige DNS-Funktionen in einem Kommando: Zuerst muss nslookup den Servernamen pfsense.example.internal selbst auflösen – dafür muss der Host Override zwingend korrekt eingetragen sein. Schlägt das fehl, schlägt das gesamte Kommando fehl. Erst dann fragt es diesen Server nach google.com – Forwarding muss funktionieren. Die Ausgabe zeigt beide Ergebnisse explizit: den aufgelösten Servernamen und die externe Antwort..
 
