@@ -182,7 +182,7 @@ sudo systemctl restart networking
 Prüfen:
 
 ```bash
-sudo nslookup google.com pfsense.exapmle.internal
+sudo nslookup google.com pfsense.example.internal
 ```
 ![Gateway-Umstellung SRV2](../images/img_33.png)
 
