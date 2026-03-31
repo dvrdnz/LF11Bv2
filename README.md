@@ -83,6 +83,9 @@ Physical Host (Remote Lab – Windows Server 2019 Datacenter)
 - [`03-dns.md`](docs/03-dns.md) – bind9 (SRV1) → DNS Resolver (Unbound) in pfSense
 - [`04-proxmox.md`](docs/04-proxmox.md) – Gateway-Umstellung Proxmox & SRV2, Legacy-Abschaltung (SRV1, Debian Router)
 - [`05-ntp.md`](docs/05-ntp.md) – Chrony ablösen, NTP über pfSense
+- [`06-hardening.md`](docs/06-hardening.md) – System-Härtung und Sicherheitsmaßnahmen
+- [`07-monitoring.md`](docs/07-monitoring.md) – Monitoring, Logging und Überwachung (in Arbeit)
+- [`08-hardenning_2.md`](docs/08-hardenning_2.md) – Erweiterte Härtung / Nachbearbeitung (in Arbeit)
 
 - [`images/`](images/) – Abbildungen und Diagramme
 
