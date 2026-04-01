@@ -21,7 +21,7 @@ Monitoring misst – aber was es misst ist nur so verlässlich wie die Umgebung 
 | RAM | 2 GB |
 | CPU | 2 vCPU |
 | Disk | 20 GB |
-| Netzwerk | Internes Netz (wie alle anderen VMs) |
+| Netzwerk | Firmennetzwerk |
 
 Nach der Installation: statische DHCP-Zuweisung in pfSense unter **Services → DHCP Server → LAN → Static Mappings** (MAC → `192.168.10.20`).
 
@@ -37,7 +37,7 @@ sudo apt install curl wget gnupg2 -y
 
 ---
 
-### Schritt 3 – Prometheus installieren
+## Schritt 3 – Prometheus installieren
 
 Dedicated User anlegen:
 
@@ -80,17 +80,17 @@ global:
   scrape_interval: 5s
 
 scrape_configs:
-  - job_name: 'monitoring'
-    static_configs:
-      - targets: ['localhost:9090']
-
   - job_name: 'nodes'
     static_configs:
       - targets:
         - 192.168.10.2:9100    # pfsense
         - 192.168.10.10:9100   # Mint
         - 192.168.10.20:9100   # Monitoring (self)
+        - 10.10.10.1:9182      # Windows Host
 ```
+
+
+> Ein vollständiger TLS-Aufbau mit eigener CA und IP SANs ist für Kapitel 08 vorgesehen.
 
 ```bash
 sudo chown prometheus:prometheus /etc/prometheus/prometheus.yml
@@ -130,7 +130,8 @@ Funktionsnachweis:
 ```bash
 sudo systemctl status prometheus
 ```
-![DNS-Enforcement validiert](/images/img_53.png)
+
+[![Prometheus systemd-Service aktiv](../images/img_53.png)](../images/img_53.png)
 
 Erreichbarkeit prüfen: `http://192.168.10.20:9090`
 
@@ -161,9 +162,6 @@ Login: `admin / admin` → Passwort ändern.
 
 **Connections → Data Sources → Add data source → Prometheus**
 
-![DNS-Enforcement validiert](/images/img_54.png)
-
-![DNS-Enforcement validiert](/images/img_55.png)
 | Feld | Wert |
 | --- | --- |
 | Type | Prometheus |
@@ -171,9 +169,13 @@ Login: `admin / admin` → Passwort ändern.
 
 → **Save & Test**
 
+[![Grafana – Data Source Prometheus erfolgreich verbunden](../images/img_54.png)](../images/img_54.png)
+
+[![Grafana – Data Source Übersicht](../images/img_55.png)](../images/img_55.png)
+
 ---
 
-### Schritt 8 – Node Exporter auf allen VMs installieren
+### Schritt 8 – Node Exporter auf Linux-VMs installieren
 
 Auf jeder VM (`mint`, `monitoring`):
 
@@ -209,12 +211,12 @@ sudo systemctl start node_exporter
 
 Funktionsnachweis:
 
-```
+```bash
 http://<VM-IP>:9100/metrics
+
 ```
 
 ---
-
 
 ### Schritt 9 – Node Exporter auf pfSense
 
@@ -224,8 +226,6 @@ pfSense läuft auf FreeBSD – der Linux Node Exporter ist nicht kompatibel. pfS
 
 Node Exporter als Service aktivieren – über **Diagnostics → Command Prompt**:
 
-![DNS-Enforcement validiert](/images/img_58.png)
-
 ```bash
 sysrc node_exporter_enable="YES"
 service node_exporter start
@@ -233,7 +233,12 @@ service node_exporter start
 
 Unter **Status → Services** muss `node_exporter` als aktiv erscheinen.
 
-#### Firewall-Regel für Port 9100
+[![pfSense – node_exporter Service aktiv](../images/img_58.png)](../images/img_58.png)
+
+[![pfSense – node_exporter Service](../images/img_63.png)](../images/img_63.png)
+
+[![pfSense – node_exporter Service aktiviert](../images/img_64.png)](../images/img_64.png)
+### Firewall-Regel für Port 9100
 
 LAN-zu-LAN Traffic läuft direkt über den Switch – pfSense sieht ihn nicht. Traffic der pfSense selbst als Ziel hat wird jedoch von pfSense selbst verarbeitet und braucht eine explizite Pass-Regel.
 
@@ -251,17 +256,11 @@ LAN-zu-LAN Traffic läuft direkt über den Switch – pfSense sieht ihn nicht. T
 
 → **Save** → **Apply Changes**
 
-Funktionsnachweis von der Monitoring-VM:
+### Sicherheitsarchitektur
 
-```bash
-curl http://192.168.10.2:9100/metrics
-```
+Die Monitoring-VM ist ein dedizierter Monitoring-Knoten mit direktem Zugriff auf pfSense selbst sowie zusätzlichem Zugriff auf das interne Hyper-V-Segment. Diese Zugriffe sind funktional notwendig, werden jedoch durch die Firewalls der jeweiligen Hosts beschränkt.
 
-#### Sicherheitsarchitektur
-
-Die Monitoring-VM hat damit direkten Zugriff auf pfSense selbst. Das ist bewusst so – Prometheus muss aktiv zu allen Hosts verbinden, das ist seine Aufgabe. Die Monitoring-VM ist ein dedizierter vertrauenswürdiger Management-Host, der Zugriff ist funktional notwendig und architektonisch akzeptiert.
-
-Konsequenz: die Monitoring-VM wird auf das Extremste gehärtet. Ubuntu Server wurde bereits minimal installiert – kein Desktop, keine unnötigen Dienste. Ausgehender Internet-Traffic der Monitoring-VM wird in pfSense blockiert: nach der Installation sind alle Targets intern, Internet-Zugang ist nicht notwendig.
+Ausgehender Internet-Traffic der Monitoring-VM wird in pfSense blockiert – nach der Installation sind alle Targets intern, Internet-Zugang ist nicht notwendig.
 
 **Firewall → Rules → LAN → ↑ Add**
 
@@ -272,13 +271,17 @@ Konsequenz: die Monitoring-VM wird auf das Extremste gehärtet. Ubuntu Server wu
 | Protocol | any |
 | Source | `192.168.10.20` |
 | Destination | `!192.168.10.0/24` |
-| Destination Port | any |
-| Description | Block Monitoring-VM → Internet |
+| Description | Block Monitoring-VM to Internet |
+
+[![pfSense – node_exporter Service aktiviert](../images/img_71.png)](../images/img_71.png)
+
+**"Invert match" bzw. " ! " negiert eine Bedingung:**
+
+`Destination = !192.168.10.0/24` bedeutet: „Nicht das LAN-Netz".
+
+Praktische Auswirkung: Mit `!` wird die Regel auf **alles angewendet, was NICHT das LAN ist** – also auf externen Traffic (Internet, andere VLANs). In Kombination mit der **Block-Action** ergibt sich: „Blockiere den gesamten ausgehenden Traffic, der nicht intern ist."
 
 → **Save** → **Apply Changes**
-
-> Hinweis: Da `Protocol` auf `any` steht, ist hier kein spezieller Port notwendig; die Regel blockiert den gesamten ausgehenden Verkehr der Monitoring-VM ins Nicht-LAN.
-
 
 ---
 
@@ -328,64 +331,145 @@ sudo chmod 600 /etc/netplan/01-monitoring-switch.yaml
 sudo netplan apply
 ```
 
-#### 10.3 – Windows Exporter installieren
+### 10.3 – Windows Exporter installieren
 
 Version 0.31.5 herunterladen:
 `https://github.com/prometheus-community/windows_exporter/releases/download/v0.31.5/windows_exporter-0.31.5-amd64.msi`
 
 Im Setup-Wizard:
 
-![DNS-Enforcement validiert](/images/img_56.png)
+[![Windows Exporter – Setup Wizard](../images/img_56.png)](../images/img_56.png)
 
 **Firewall Exception:** im MSI-Wizard deaktivieren – Firewall-Regeln werden manuell und interface-spezifisch angelegt.
 
 **Collectors:** `cpu,logical_disk,net,os,system,hyperv`
 
-![DNS-Enforcement validiert](/images/img_57.png)
+[![Windows Exporter – Collectors Auswahl](../images/img_57.png)](../images/img_57.png)
 
 | Collector | Metriken |
 | --- | --- |
-| `cpu` | CPU-Auslastung pro Core + gesamt – Grundlage für Spikes und Bottlenecks |
-| `logical_disk` | I/O pro Laufwerk (Read/Write, Queue Length) – Storage-Bottlenecks |
-| `net` | Netzwerktraffic + Errors pro Interface – VM ↔ Host ↔ Netzwerk Analyse |
+| `cpu` | CPU-Auslastung pro Core + gesamt |
+| `logical_disk` | I/O pro Laufwerk (Read/Write, Queue Length) |
+| `net` | Netzwerktraffic + Errors pro Interface |
 | `os` | Uptime, Prozesse, grundlegender Systemzustand |
-| `system` | Threads und Prozesse gesamt auf Systemebene |
+| `system` | Threads und Prozesse gesamt |
 | `hyperv` | VM-spezifische Metriken direkt vom Hypervisor |
-
 
 **Port:** 9182
 
-#### 10.4 – Windows Firewall Regeln anlegen
+### 10.4 – Windows Firewall Regeln anlegen
 
 Die Windows Firewall blockiert standardmäßig eingehenden Traffic – auch auf dem internen vSwitch. Regeln explizit auf `vEthernet (monitoring-switch)` beschränken, damit Port 9182 nicht auf allen Interfaces geöffnet wird.
 
 ```powershell
-New-NetFirewallRule -DisplayName "monitoring-switch ICMP" -Direction Inbound -Protocol ICMPv4 -Action Allow -InterfaceAlias "vEthernet (monitoring-switch)"
-
-New-NetFirewallRule -DisplayName "monitoring-switch 9182" -Direction Inbound -Protocol TCP -LocalPort 9182 -Action Allow -InterfaceAlias "vEthernet (monitoring-switch)"
+New-NetFirewallRule `
+  -DisplayName "monitoring-switch 9182 from Prometheus" `
+  -Direction Inbound `
+  -Protocol TCP `
+  -LocalPort 9182 `
+  -RemoteAddress 10.10.10.2 `
+  -InterfaceAlias "vEthernet (monitoring-switch)" `
+  -Action Allow
 ```
 
-> Beide Regeln sind auf `vEthernet (monitoring-switch)` beschränkt – Port 9182 ist damit ausschließlich über den dedizierten Monitoring-Switch erreichbar, nicht über LAN oder WAN.
-
-#### 10.5 – Funktionsnachweis
-
-Von der Monitoring-VM:
-
-```bash
-ping 10.10.10.1
-curl http://10.10.10.1:9182/metrics
+```powershell
+New-NetFirewallRule `
+  -DisplayName "monitoring-switch ICMP from Prometheus" `
+  -Direction Inbound `
+  -Protocol ICMPv4 `
+  -RemoteAddress 10.10.10.2 `
+  -InterfaceAlias "vEthernet (monitoring-switch)" `
+  -Action Allow
 ```
-![DNS-Enforcement validiert](/images/img_60.png)
-#### 10.6 – Target in prometheus.yml ergänzen
+
+> **Beide Regeln sind auf `vEthernet (monitoring-switch)` beschränkt – Port 9182 ist damit ausschließlich über den dedizierten Monitoring-Switch erreichbar, nicht über LAN oder WAN.**
+
+### 10.5 – Target in prometheus.yml ergänzen
 
 ```yaml
 - 10.10.10.1:9182   # Windows Host (Hyper-V)
 ```
 
+[![prometheus config](../images/img_65.png)](../images/img_65.png)
+
+
 ```bash
 sudo systemctl restart prometheus
 ```
 
+### 10.6 – Funktionsnachweis
+
+Von der Monitoring-VM:
+
+```bash
+ping 10.10.10.1 -c 4
+curl http://10.10.10.1:9182/metrics | grep product=
+```
+
+[![curl – Windows Exporter Metriken erreichbar](../images/img_60.png)](../images/img_60.png)
+
 ---
 
-> Hinweis: Dieses Kapitel ist aktuell noch in Arbeit und beschreibt den geplanten Monitoring-Aufbau. Weitere Anpassungen und Detaillierungen folgen.
+## Schritt 11 – Funktionsnachweis: Prometheus Targets
+
+Alle konfigurierten Targets müssen im Status **UP** erscheinen.
+
+`http://192.168.10.20:9090/targets`
+
+
+[![Prometheus – alle Targets UP](../images/img_66.png)](../images/img_66.png)
+
+---
+
+## Schritt 12 – Funktionsnachweis: Grafana Dashboards
+
+Grafana ermöglicht den Import vorgefertigter Community-Dashboards direkt über [grafana.com/dashboards](https://grafana.com/grafana/dashboards/). Der Importprozess ist für beide Dashboards identisch:
+
+**Dashboards → New → Import**
+
+[![Grafana – Import Dashboard Einstiegsseite](../images/img_67.png)](../images/img_67.png)
+
+Im Eingabefeld **„Grafana.com dashboard URL or ID"** die jeweilige ID eintragen und **Load** klicken. Die Dashboard-ID ist auf grafana.com bei jedem Dashboard über **Copy ID to clipboard** abrufbar.
+
+---
+
+### Node Exporter Full (ID 1860)
+
+Dashboard auf [grafana.com/grafana/dashboards/1860](https://grafana.com/grafana/dashboards/1860) suchen oder direkt ID `1860` im Import-Feld eintragen.
+
+[![Grafana.com – Node Exporter Full Dashboard, ID 1860 sichtbar](../images/img_68.png)](../images/img_68.png)
+
+[![Grafana.com – Node Exporter Full Detailseite mit Copy ID to clipboard](../images/img_69.png)](../images/img_69.png)
+
+**Dashboards → New → Import → ID `1860` → Load**
+
+Datasource: `prometheus` → **Import**
+
+Zeigt CPU, RAM, Disk und Netzwerk für alle Linux-Targets und pfSense. Über den **Nodename**-Filter lassen sich einzelne Hosts auswählen: `Mint-Machine`, `monitoring`, `pfSense`.
+
+[![Grafana – Node Exporter Full Dashboard mit Nodename-Dropdown](../images/img_72.png)](../images/img_72.png)
+
+
+---
+
+### Windows Server Status Dashboard (ID 16523)
+
+Dashboard auf [grafana.com/grafana/dashboards/16523](https://grafana.com/grafana/dashboards/16523) suchen oder direkt ID `16523` im Import-Feld eintragen. Die ID wird analog zu 1860 über **Copy ID to clipboard** übernommen.
+
+[![Grafana.com – Windows Server Status Dashboard, ID 16523 sichtbar](../images/img_70.png)](../images/img_70.png)
+
+**Dashboards → New → Import → ID `16523` → Load**
+
+Datasource: `prometheus` → **Import**
+
+Zeigt CPU, RAM, Disk und Netzwerk des Hyper-V Hosts. Instance: `10.10.10.1:9182`.
+
+[![Grafana – Windows Server Status Dashboard mit Hyper-V Host Metriken](../images/img_73.png)](../images/img_73.png)
+
+
+---
+
+## Abschluss-Übersicht
+
+
+Die Monitoring-Infrastruktur ist vollständig operativ. Alle Targets werden von Prometheus gescrapt, Metriken sind in Grafana visualisiert. 
