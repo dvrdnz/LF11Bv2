@@ -2,95 +2,109 @@
 
 > **🔗 Ausgangsbasis**: Dieses Projekt ist die Fortsetzung von [LF10Bv2](https://github.com/dvrdnz/LF10Bv2/tree/main)
 
+## Ziel dieses Repos
 
-## Ausgangslage
+Das Repository dokumentiert Schritt für Schritt den Betrieb und die Absicherung einer vernetzten Systemumgebung – von der Migration auf pfSense über Enforcement bis hin zu Observability – sodass jeder Schritt nachvollziehbar und die gesamte Umgebung reproduzierbar ist.
+
+## Phasenmodell (chronologisch)
+
+### Phase 0 – Ausgangslage (LF10Bv2)
 
 In LF10Bv2 wurde eine kleine virtuelle Unternehmensumgebung auf einem Windows Host (Windows Server 2019 Datacenter) unter Hyper-V betrieben:
 
-| Komponente    | Rolle                                                        | IP            |
-| ------------- | ------------------------------------------------------------ | ------------- |
-| Debian Router | NAT-Gateway, iptables                                        | 192.168.10.1  |
-| Proxmox       | Hypervisor (Nested Virtualization)                           | 192.168.10.10 |
-| SRV1          | DNS (bind9), DHCP (Kea)                                      | 192.168.10.11 |
-| TrueNAS       | Storage (ZFS)                                                | 192.168.10.12 |
-| SRV2          | Webserver (Apache2), Nextcloud, Docker, Reverse Proxy        | 192.168.10.13 |
-| Linux Mint    | Admin-Client                                                 | 192.168.10.50 |
+| Komponente    | Rolle                                                 | IP            |
+| ------------- | ----------------------------------------------------- | ------------- |
+| Debian Router | NAT-Gateway, iptables                                 | 192.168.10.1  |
+| Proxmox       | Hypervisor (Nested Virtualization)                    | 192.168.10.10 |
+| SRV1          | DNS (bind9), DHCP (Kea)                               | 192.168.10.11 |
+| TrueNAS       | Storage (ZFS)                                         | 192.168.10.12 |
+| SRV2          | Webserver (Apache2), Nextcloud, Docker, Reverse Proxy | 192.168.10.13 |
+| Linux Mint    | Admin-Client                                          | 192.168.10.50 |
 
 SRV1 und SRV2 liefen als VMs in Proxmox. TrueNAS, Debian Router und Linux Mint liefen direkt unter Hyper-V.
-
 Die Firewall-Policy wurde über `scripts/fw_policy.sh` (iptables) auf dem Debian Router verwaltet.
 
-## Migration
-
-Die Netzwerkdienste von Debian Router und SRV1 werden auf **pfSense 2.8.1** konsolidiert – ein einzelnes System übernimmt Gateway, Firewall, DHCP und DNS. Debian Router und SRV1 entfallen.
-
-Proxmox, TrueNAS und SRV2 bleiben erhalten, werden aber auf Gateway und DNS-Server umgestellt.
-
-| Abgelöste Komponente | Abgelöster Dienst        | pfSense-Äquivalent           |
-| -------------------- | ------------------------ | ---------------------------- |
-| Debian Router        | iptables / NAT           | Firewall → Rules & NAT       |
-| SRV1                 | Kea DHCPv4               | Services → DHCP Server (Kea) |
-| SRV1                 | bind9 | DNS Resolver (Unbound)       |
-
-## Netzwerkdiagramm
-
 ```
-Internet
-    │
-   WAN (DHCP – 10.100.15.x)
-┌─────────────┐
-│   pfSense   │ 192.168.10.2  ← Gateway, Firewall, DHCP, DNS
-└─────────────┘
-   LAN  192.168.10.0/24
-    │
-    ├── .2         pfSense  (Gateway, DNS-Resolver)
-    ├── .10        Admin Client   (Linux Mint – statische DHCP-Zuweisung)
-    ├── .11        TrueNAS  (Storage)
-    ├── .12        Proxmox  (Hypervisor)
-    ├── .13        SRV2     (Reverse Proxy, Docker)
-    └── .11–.245   DHCP-Pool
-```
-
-## Architekturdiagramm
-
-```
-Physical Host (Remote Lab – Windows Server 2019 Datacenter)
-│
+Windows Server 2019 Datacenter
 └── Hyper-V
-    │
-    ├── pfSense VM          → Gateway, Firewall, DHCP, DNS
-    │
-    ├── Proxmox VM          → Hypervisor (Nested Virtualization)
-    │      │
-    │      └── SRV2         → Reverse Proxy, Docker
-    │
-    ├── TrueNAS VM          → Storage (ZFS)
-    │
-    └── Linux Mint VM       → Admin-Client
+    ├── Debian Router          → .1   NAT-Gateway, iptables
+    ├── Proxmox                → .10  Hypervisor
+    │      ├── SRV1            → .11  DNS (bind9), DHCP (Kea)
+    │      └── SRV2            → .13  Apache2, Nextcloud, Docker, Reverse Proxy
+    ├── TrueNAS                → .12  Storage (ZFS)
+    └── Linux Mint             → .50  Admin-Client
 ```
 
-## Technologien
+### Phase 1 – Migration (docs/00–03)
 
-* pfSense 2.8.1 (FreeBSD 15.0-CURRENT)
-* Kea DHCPv4
-* Unbound (DNS Resolver)
+Debian Router und SRV1 werden durch **pfSense 2.8.1** ersetzt – ein einzelnes System übernimmt Gateway, Firewall, DHCP und DNS.
+
+| Abgelöste Komponente | Abgelöster Dienst | pfSense-Äquivalent                |
+| -------------------- | ----------------- | --------------------------------- |
+| Debian Router        | iptables / NAT    | Firewall → Rules & NAT            |
+| SRV1                 | Kea DHCPv4        | Services → DHCP Server (Kea)      |
+| SRV1                 | bind9             | Services → DNS Resolver (Unbound) |
+
+```
+Windows Server 2019 Datacenter
+└── Hyper-V
+    ├── pfSense                → .2   Gateway, Firewall, DHCP, DNS
+    ├── Debian Router          → .1   (läuft noch)
+    ├── Proxmox                → .12  Hypervisor
+    │      ├── SRV1            → .11  (läuft noch)
+    │      └── SRV2            → .13  Reverse Proxy, Docker
+    ├── TrueNAS                → .11  Storage (ZFS)
+    └── Linux Mint             → .10  Admin-Client
+```
+
+### Phase 2 – pfSense als SSOT (docs/04–06)
+
+pfSense wird zur einzigen autorisierten Quelle für IP-Vergabe, DNS und NTP.
+Dazu werden die abgelösten Systeme stillgelegt und Enforcement-Regeln gesetzt:
+
+- **IP**: Alle bekannten Hosts erhalten Static Mappings; der DHCP-Pool ist auf den definierten Bereich beschränkt.
+- **DNS**: Direkte Anfragen an externe Resolver werden geblockt – alle Clients müssen pfSense als Resolver nutzen.
+- **NTP**: Hyper-V-Zeitsynchronisierung wird auf allen VMs deaktiviert; pfSense ist die einzige NTP-Quelle.
+
+```
+Windows Server 2019 Datacenter
+└── Hyper-V
+    ├── pfSense                → .2   Gateway, Firewall, DHCP, DNS, NTP
+    └── Linux Mint             → .10  Admin-Client
+```
+
+### Phase 3 – Observability (docs/07–08)
+
+- **Monitoring-VM** (`.20`): Zeitreihen (Prometheus/Grafana) – Wann/Trend/Korrelation
+
+```
+Windows Server 2019 Datacenter
+└── Hyper-V
+    ├── pfSense                → .2   Gateway, Firewall, DHCP, DNS, NTP
+    ├── Linux Mint             → .10  Admin-Client
+    └── Monitoring             → .20  Prometheus, Grafana
+
+```
+
 
 ## Kapitel
 
-- [`00-pfsense.md`](docs/00-pfsense.md) – VM-Setup, Netzwerkkonfiguration, System-Update
-- [`01-firewall.md`](docs/01-firewall.md) – iptables → pfSense Firewall & NAT (inkl. RDP-Portforward)
-- [`02-dhcp.md`](docs/02-dhcp.md) – Kea DHCP (SRV1) → DHCP Server in pfSense
-- [`03-dns.md`](docs/03-dns.md) – bind9 (SRV1) → DNS Resolver (Unbound) in pfSense
-- [`04-proxmox.md`](docs/04-proxmox.md) – Gateway-Umstellung Proxmox & SRV2, Legacy-Abschaltung (SRV1, Debian Router)
-- [`05-ntp.md`](docs/05-ntp.md) – Chrony ablösen, NTP über pfSense
-- [`06-hardening.md`](docs/06-hardening.md) – System-Härtung und Sicherheitsmaßnahmen
-- [`07-monitoring.md`](docs/07-monitoring.md) – Monitoring, Logging und Überwachung (in Arbeit)
-- [`08-hardenning_2.md`](docs/08-hardenning_2.md) – Erweiterte Härtung / Nachbearbeitung (in Arbeit)
+- **Migration**
+  - [`00-pfsense.md`](docs/00-pfsense.md) – VM-Setup, Netzwerkkonfiguration, System-Update
+  - [`01-firewall.md`](docs/01-firewall.md) – iptables → pfSense Firewall & NAT (inkl. RDP-Portforward)
+  - [`02-dhcp.md`](docs/02-dhcp.md) – Kea DHCP (SRV1) → DHCP Server in pfSense
+  - [`03-dns.md`](docs/03-dns.md) – bind9 (SRV1) → DNS Resolver (Unbound) in pfSense
+- **pfSense als SSOT**
+  - [`04-proxmox.md`](docs/04-proxmox.md) – Gateway-Umstellung Proxmox & SRV2, Stilllegung SRV1 + Debian Router
+  - [`05-ntp.md`](docs/05-ntp.md) – Chrony ablösen, NTP über pfSense
+  - [`06-hardening.md`](docs/06-hardening.md) – Infrastructure Enforcement Policy
+- **Observability**
+  - [`07-monitoring.md`](docs/07-monitoring.md) – Monitoring (Prometheus, Grafana)
 
-- [`images/`](images/) – Abbildungen und Diagramme
+
+[`images/`](images/) – Abbildungen und Diagramme
 
 ---
-
 
 ## Lizenz
 
