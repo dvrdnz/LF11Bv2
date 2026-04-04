@@ -150,7 +150,7 @@ nano /etc/resolv.conf
 
 ```
 # vorher
-nameserver 192.168.10.12
+nameserver 192.168.10.11
 
 # nachher
 nameserver 192.168.10.2
