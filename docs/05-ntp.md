@@ -182,7 +182,7 @@ chronyc tracking
 ```bash
 nano /etc/systemd/timesyncd.conf   
 ```
-![/etc/ntp.conf – TrueNAS](../images/img_47.png)
+![/etc/ntp.conf – SRV2](../images/img_47.png)
 > NTP= auskommementiren und pfsense.example.internal eintragen
 ```
 timedatectl timesync-status
