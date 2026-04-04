@@ -6,7 +6,7 @@ Kapitel 07 liefert **Monitoring** (Zeitreihen/Verlauf). Die Capture-VM ergänzt 
 
 #### Architekturprinzip: Inline-Capture via Bridge
 
-Hyper-V Port Mirroring und pfSense `dup-to` wurden in ADR-01 evaluiert; beide wurden verworfen.Die Entscheidungsdokumentation mit allen geprüften Optionen und Begründungen liegt in [ADR-01 – Capture-Methode](../decisions/01-capture-method.md)(ADR-01).
+Hyper-V Port Mirroring und pfSense `dup-to` wurden in ADR-01 evaluiert; beide wurden verworfen. Die Entscheidungsdokumentation mit allen geprüften Optionen und Begründungen liegt in [ADR-01 – Capture-Methode](../decisions/01-capture-method.md)(ADR-01).
 
 Die Capture-VM arbeitet im **Inline-Modus**:
 
@@ -355,3 +355,138 @@ Funktionsnachweis: `http://192.168.10.20:9090/targets` → `192.168.10.21:9100` 
 Die Firewall-Regel entspricht der bereits in `07-monitoring.md` angelegten `Block Monitoring-VM to Internet`. Der Kopieren-Button kann genutzt werden; `Source-IP` und `Description` müssen angepasst werden.
 
 → **Save** → **Apply Changes**
+
+---
+
+#### 1.14 – Gezielter Capture: DNS- und NTP-Policy
+
+Trigger: Firewall-Log zeigt geblockte Anfrage auf Port 53 oder 123 von einem LAN-Host.
+
+Der Filter kombiniert immer zwei Bedingungen: Quell-Host und falsches Ziel. Ein Host der pfSense korrekt anfragt ist kein Verstoß — der Capture soll ausschließlich Abweichungen sichtbar machen.
+
+**DNS-Verstoß eines bekannten Hosts:**
+
+```bash
+# Host .10 fragt externen DNS
+sudo tcpdump -i br0 -nn -s0 \
+  'src host 192.168.10.10 and port 53 and not dst host 192.168.10.2'
+```
+
+**DNS-Verstöße aus dem gesamten LAN (unbekannte Quelle):**
+
+```bash
+sudo tcpdump -i br0 -nn -s0 \
+  'port 53 and not dst host 192.168.10.2 and not src host 192.168.10.2'
+```
+
+> `not src host 192.168.10.2` schließt Unbound-eigene Upstream-Anfragen aus — pfSense selbst fragt externe Resolver, das ist kein Verstoß.
+
+**NTP-Verstoß eines bekannten Hosts:**
+
+```bash
+sudo tcpdump -i br0 -nn -s0 \
+  'src host 192.168.10.10 and udp port 123 and not dst host 192.168.10.2'
+```
+
+**NTP-Verstöße aus dem gesamten LAN:**
+
+```bash
+sudo tcpdump -i br0 -nn -s0 \
+  'udp port 123 and not dst host 192.168.10.2 and not src host 192.168.10.2'
+```
+
+> `not src host 192.168.10.2` schließt pfSense-eigenen Upstream-NTP-Traffic aus — pfSense fragt `de.pool.ntp.org`, das ist kein Verstoß.
+
+**Beide Protokolle gleichzeitig, gesamtes LAN:**
+
+```bash
+sudo tcpdump -i br0 -nn -s0 \
+  '(port 53 or udp port 123) and not dst host 192.168.10.2 and not src host 192.168.10.2'
+```
+
+
+**DNS-Verstoß provozieren**
+
+Auf dem Client (`mint-machine`, `192.168.10.10`) — in einem zweiten Terminal, während tcpdump auf der CaptureVM läuft:
+
+```bash
+# DNS-Verstoß: externen Resolver direkt ansprechen
+nslookup google.com 1.1.1.1
+```
+
+`nslookup` sendet den DNS-Request unabhängig davon ob eine Antwort kommt — das Paket verlässt den Client, läuft durch `br0` und wird von pfSense geblockt. tcpdump sieht den Request, keine Response. Das ist der erwartete Befund.
+
+[![DNS-Verstoß auf mint-machine provoziert; CaptureVM zeigt Requests ohne Response](../images/img_82.png)](../images/img_82.png)
+
+> Oben: `nslookup google.com 8.8.8.8` läuft auf mint-machine in Timeout — pfSense blockt. `ntpdate -q pool.ntp.org` liefert `ntpdig: no eligible servers`. Unten: tcpdump auf `br0` sieht die DNS-Requests von `192.168.10.10` an `8.8.8.8:53` (3 Pakete, keine Response), anschließend die NTP-Requests von `192.168.10.10` an mehrere pool.ntp.org-Adressen (keine Response). Der Capture beweist: die Pakete verlassen den Client und laufen durch die Bridge — pfSense empfängt und blockiert sie.
+
+**NTP-Verstoß provozieren**
+
+```bash
+# NTP-Verstoß: timesyncd temporär auf externen Server umbiegen
+sudo sed -i 's/NTP=pfsense.example.internal/NTP=pool.ntp.org/' /etc/systemd/timesyncd.conf
+sudo systemctl restart systemd-timesyncd
+
+# wiederherstellen
+sudo sed -i 's/NTP=pool.ntp.org/NTP=pfsense.example.internal/' /etc/systemd/timesyncd.conf
+sudo systemctl restart systemd-timesyncd
+```
+
+Das erzeugt authentischen `systemd-timesyncd`-Traffic — denselben Pfad den die VM im Normalbetrieb nutzt. pfSense blockiert den ausgehenden Request, tcpdump sieht Request ohne Response. `timedatectl timesync-status` zeigt `Packet count: 0` als Bestätigung dass keine Antwort ankam. 
+
+
+[![NTP-Verstoß auf mint-machine provoziert; CaptureVM zeigt Requests ohne Response](../images/img_83.png)](../images/img_83.png)
+
+> Sobald timesyncd neugestartet wird, meldet sich der Filter unweigerlich.
+
+---
+
+#### 1.15 – PCAP-Konvention
+
+Captures werden unter `~/captures/` abgelegt:
+
+```bash
+mkdir -p ~/captures
+cd ~/captures
+```
+
+Dateinamenschema: `<protokoll>_<datum>_<uhrzeit>_<kurzbeschreibung>.pcapng`
+
+```bash
+# DNS
+sudo tcpdump -i br0 -nn -s0 -w dns_$(date +%F_%H%M)_case.pcapng port 53
+
+# NTP
+sudo tcpdump -i br0 -nn -s0 -w ntp_$(date +%F_%H%M)_case.pcapng udp port 123
+```
+
+**Capture-Trigger**
+
+Ein Capture wird ausschließlich bei konkretem Anlass gestartet – kein Dauerbetrieb.
+
+Jeder Capture erfordert vor dem Start:
+
+```text
+Anlass:        <was wurde beobachtet, wo>
+Filter:        <tcpdump-Ausdruck>
+Stopbedingung: <wann wird gestoppt, z. B. nach erstem vollständigem Exchange>
+```
+
+Capture stoppen: `Ctrl+C`
+
+---
+
+### Abschluss
+
+Mit diesem Kapitel ist die Enforcement-Policy aus Kapitel 06 auf drei Ebenen überprüfbar:
+
+pfSense (Policy): Das Firewall-Log zeigt, dass die Regel greift.
+Client (Wirkung): Anfragen schlagen fehl (nslookup, timedatectl).
+CaptureVM (Netzwerkebene): Der Request ist auf br0 sichtbar, eine Response fehlt.
+
+Erst die Kombination dieser drei Perspektiven zeigt den vollständigen Ablauf:
+Der Client sendet den Request, das Paket erreicht pfSense, und wird dort durch die Policy blockiert.
+
+Die CaptureVM ergänzt damit Monitoring und Logs um eine direkte Sicht auf den tatsächlichen Netzwerkverkehr und macht das Verhalten auf Paketebene nachvollziehbar.
+
+Kapitel 09 baut darauf auf und nutzt die CaptureVM zur Analyse gezielt erzeugten Traffics.

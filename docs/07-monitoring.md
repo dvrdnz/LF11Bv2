@@ -86,11 +86,7 @@ scrape_configs:
         - 192.168.10.2:9100    # pfsense
         - 192.168.10.10:9100   # Mint
         - 192.168.10.20:9100   # Monitoring (self)
-        - 10.10.10.1:9182      # Windows Host
 ```
-
-
-> Ein vollständiger TLS-Aufbau mit eigener CA und IP SANs ist für Kapitel 08 vorgesehen.
 
 ```bash
 sudo chown prometheus:prometheus /etc/prometheus/prometheus.yml

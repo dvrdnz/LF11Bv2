@@ -128,7 +128,6 @@ MAC-Adressen sind unter **Diagnostics → ARP Table** in pfSense einsehbar – a
 | truenas | – | `192.168.10.11` |
 | proxmox | – | `192.168.10.12` |
 | srv2 | – | `192.168.10.13` |
-| monitoring | – | `192.168.10.20` |
 
 
 ![DHCP Static Mappings: Übersicht der statischen Zuordnungen](../images/img_51.png)
@@ -237,7 +236,7 @@ Die bestehenden DHCP Static Mappings in pfSense bleiben unverändert erhalten. D
 
 In der PowerShell:
 
-```powershel
+```powershell
 Stop-VM -name "Proxmox"
 Stop-VM -name "TrueNAS"
 ```
