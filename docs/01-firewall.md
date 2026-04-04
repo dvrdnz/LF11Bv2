@@ -69,7 +69,7 @@ Der Screenshot zeigt die *Default deny rule IPv4/IPv6* auf WAN – geblockte Pak
 
 ### Mapping: fw_policy.sh → pfSense
 
-#### 1. NAT / Masquerading (LAN → WAN)
+#### Schritt 1 – NAT / Masquerading (LAN → WAN)
 
 **iptables:**
 ```bash
@@ -84,7 +84,7 @@ Firewall → NAT → Outbound → Modus: *Automatic Outbound NAT* – bereits ak
 > Outbound NAT im Automatic-Modus – pfSense führt automatisch Masquerading für den gesamten LAN-Traffic über das WAN-Interface durch.
 ---
 
-#### 2. Default-DROP Policy
+#### Schritt 2 – Default-DROP Policy
 
 **iptables:**
 ```bash
@@ -112,7 +112,7 @@ Nach dem Löschen erscheint ein gelber Hinweisbalken: *„The firewall rule conf
 ---
 
 
-#### 3. HTTP / HTTPS erlauben (LAN → WAN)
+#### Schritt 3 – HTTP / HTTPS erlauben (LAN → WAN)
 
 **iptables:**
 ```bash
@@ -174,7 +174,7 @@ Dann **+ Add Port** klicken und zweiten Eintrag ergänzen:
 
 ---
 
-#### 4. DNS erlauben (LAN → WAN)
+#### Schritt 4 – DNS erlauben (LAN → WAN)
 
 **iptables:**
 ```bash
@@ -203,7 +203,7 @@ Firewall → Rules → LAN → **↑ Add**
 
 ---
 
-#### 5. ICMP (Ping) erlauben
+#### Schritt 5 – ICMP (Ping) erlauben
 
 **iptables:**
 ```bash
@@ -237,7 +237,7 @@ Firewall → Rules → LAN → **↑ Add**
 
 > *Finaler Stand der LAN-Regelliste: Anti-Lockout Rule, ICMP Echo, DNS und HTTP_HTTPS aktiv.*
 
-#### 6. RDP-Portforward → 192.168.10.50
+#### Schritt 6 – RDP-Portforward → 192.168.10.50
 
 **iptables:**
 ```bash
