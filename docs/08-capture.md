@@ -4,13 +4,22 @@
 
 Kapitel 07 liefert **Monitoring** (Zeitreihen/Verlauf). Die Capture-VM ergänzt das Monitoring um Wire-Level-Debugging – sie beantwortet nicht nur ob etwas auf dem Netzwerk passiert, sondern was genau auf dem Netzwerk passiert: welche Pakete fließen, welche verloren gehen, welche Protokolle tatsächlich genutzt werden.
 
-#### Warum eine eigene VM?
+#### Architekturprinzip: Inline-Capture via Bridge
 
-Die Capture-VM läuft im **Promiscuous Mode** als Port-Mirroring-Destination – sie empfängt Fremdtraffic, den keine andere VM zu sehen bekommt. Diese Rolle wird bewusst isoliert:
+Hyper-V Port Mirroring und pfSense `dup-to` wurden in ADR-01 evaluiert; beide wurden verworfen.Die Entscheidungsdokumentation mit allen geprüften Optionen und Begründungen liegt in [ADR-01 – Capture-Methode](../decisions/01-capture-method.md)(ADR-01).
 
-- **Separation of Concerns:** Monitoring speichert Zeitreihen; Capture empfängt gespiegelten Traffic passiv und analysiert Paketinhalt. Capture erzeugt keinen eigenen Mess-Traffic – das ist nicht Aufgabe der Capture-VM.
-- **Sicherheit:** Eine VM, die den gesamten LAN-Traffic sehen könnte, bekommt keinen Internet-Zugang und keine produktiven Dienste.
-- **Stabilität:** Fällt die Capture-VM aus oder wird sie neu gestartet, bleibt das Monitoring unberührt.
+Die Capture-VM arbeitet im **Inline-Modus**:
+
+```
+LAN-Clients (Firmennetzwerk) ↔ CaptureVM (br0) ↔ pcap-br ↔ pfSense LAN
+```
+
+
+Die VM betreibt eine transparente Linux-Bridge zwischen zwei Hyper-V-vSwitches (Firmennetzwerk ↔ pcap-br). Dadurch läuft der gesamte Verkehr zwischen LAN-Clients und pfSense durch `br0` und ist vollständig sichtbar, einschließlich Layer 2.
+
+Die Architektur ergibt sich direkt aus der gewählten Capture-Methode: Eine transparente Bridge zwischen zwei vSwitches erfordert eine dedizierte VM als Träger. Die Capture-VM ist damit kein eigenständiges Architekturziel, sondern eine technische Konsequenz dieser Entscheidung.
+
+Mit dieser Architektur übernimmt die Capture-VM eine Rolle im kritischen Netzwerkpfad: Sämtlicher Traffic zwischen LAN-Clients und pfSense wird durch sie geleitet. Bei einem Ausfall ist dieser Pfad vollständig unterbrochen – DHCP-Vergabe, DNS-Auflösung und alle Monitoring-Targets hinter der Bridge sind nicht mehr erreichbar.
 
 ---
 
@@ -19,7 +28,7 @@ Die Capture-VM läuft im **Promiscuous Mode** als Port-Mirroring-Destination –
 | Rolle | VM | IP | Tools | Aufgabe |
 | --- | --- | --- | --- | --- |
 | MonitoringVM | `MonitoringVM` | `192.168.10.20` | Prometheus, Grafana, Node Exporter | Monitoring und Visualisierung |
-| CaptureVM | `CaptureVM` | `192.168.10.21` | tcpdump, ethtool, Node Exporter    |  Wire-Level-Debugging via Port Mirroring   |
+| CaptureVM | `CaptureVM` | `192.168.10.21` | tcpdump, bridge-utils, ethtool, Node Exporter | Wire-Level-Debugging via Inline-Bridge |
 
 ---
 
@@ -36,7 +45,19 @@ Die Capture-VM läuft im **Promiscuous Mode** als Port-Mirroring-Destination –
 | RAM | 2048 MB |
 | CPU | 2 vCPU |
 | Disk | 20 GB |
-| Netzwerk | Firmennetzwerk |
+| Netzwerkkarte 1 | `Firmennetzwerk` |
+| Netzwerkkarte 2 | `pcap-br` (neuer interner vSwitch – siehe unten) |
+
+**Vor der VM-Erstellung: internen vSwitch anlegen**
+
+**Hyper-V Manager → Virtueller Switch-Manager → Neu → Intern → Erstellen**
+
+| Feld | Wert |
+| --- | --- |
+| Name | `pcap-br` |
+| Typ | Intern |
+
+Dieser vSwitch verbindet ausschließlich CaptureVM und pfSense. Er hat keinen Zugang zum physischen Netz.
 
 #### 1.2 – Basis-Setup
 
@@ -46,23 +67,65 @@ Nach der Installation:
 sudo apt update
 sudo apt upgrade -y
 sudo hostnamectl set-hostname pcap
+sudo apt install -y bridge-utils tcpdump dnsutils nano ethtool
 ```
 
-#### 1.3 – Static Mapping in pfSense
+#### 1.3 – Bridge einrichten
 
-MAC-Adresse ermitteln:
+Persistente Konfiguration via netplan:
 
 ```bash
-ip link show
+sudo nano /etc/netplan/01-bridge.yaml
 ```
 
-Die MAC-Adresse steht hinter `link/ether`, z. B.: `link/ether 00:15:5d:01:02:03`.
+```yaml
+network:
+  version: 2
+  renderer: networkd
+
+  ethernets:
+    eth0: {}
+    eth1: {}
+
+  bridges:
+    br0:
+      interfaces: [eth0, eth1]
+      addresses: [192.168.10.21/24]
+      nameservers:
+        addresses: [192.168.10.2]
+      routes:
+        - to: default
+          via: 192.168.10.2
+```
+
+```bash
+sudo chmod 600 /etc/netplan/01-bridge.yaml
+sudo netplan apply
+```
+
+Validierung:
+
+```bash
+ip a show br0
+```
+
+Erwartung: `inet 192.168.10.21/24` auf `br0` zugewiesen.
+
+#### 1.4 – Static Mapping in pfSense
+
+Die Bridge bekommt eine eigene MAC-Adresse – nicht die von `eth0`. Daher erst nach `netplan apply` die MAC von `br0` ermitteln:
+
+```bash
+ip link show br0
+```
+
+Die MAC-Adresse steht hinter `link/ether`, z. B.: `link/ether 2a:28:cf:b3:f7:57`.
 
 **Services → DHCP Server → LAN → Static Mappings → + Add**
 
 | Feld | Wert |
 | --- | --- |
-| MAC Address | MAC der capture-VM |
+| MAC Address | MAC von `br0` der CaptureVM |
 | IP Address | `192.168.10.21` |
 | Hostname | `pcap` |
 | Description | CaptureVM |
@@ -73,14 +136,14 @@ Die MAC-Adresse steht hinter `link/ether`, z. B.: `link/ether 00:15:5d:01:02:03`
 
 [![Static Mapping capture-VM in pfSense](../images/img_74.png)](../images/img_74.png)
 
-Lease erneuern:
+Lease erneuern und IP-Zuweisung bestätigen:
 
 ```bash
-sudo networkctl renew eth0
-ip a
+sudo networkctl renew br0
+ip a show br0
 ```
 
-Erwartung: `inet 192.168.10.21/24` ist zugewiesen.
+Erwartung: `inet 192.168.10.21/24` zugewiesen.
 
 #### 1.5 – Hyper-V Time Sync deaktivieren
 
@@ -98,7 +161,74 @@ Get-VMIntegrationService -VMName "CaptureVM" | Where-Object { $_.Name -like "*Ze
 
 Erwartung: `Enabled: False`
 
-#### 1.6 – NTP auf pfSense umstellen
+#### 1.6 – MAC Address Spoofing aktivieren (Pflicht)
+
+Eine transparente Bridge leitet Frames mit fremden Quell-MACs weiter. Hyper-V verwirft solche Frames standardmäßig stillschweigend. MAC Address Spoofing muss auf allen beteiligten NICs aktiviert werden – ohne diese Einstellung fließt kein Traffic durch die Bridge.
+
+Auf dem Hyper-V Host (PowerShell als Administrator):
+
+```powershell
+Get-VMNetworkAdapter -VMName "CaptureVM" | Set-VMNetworkAdapter -MacAddressSpoofing On
+Set-VMNetworkAdapter -VMName "pfsense router" -Name "LAN" -MacAddressSpoofing On
+```
+
+#### 1.7 – pfSense LAN-NIC auf pcap-br verschieben (Pflicht)
+
+Dieser Schritt ist der „Go-Live"-Moment: Erst danach fließt tatsächlicher Traffic durch die Bridge.
+
+> ⚠️ Während der Umstellung ist die pfSense LAN-Seite kurz nicht erreichbar. 
+
+Auf dem Hyper-V Host (PowerShell als Administrator):
+
+Aktuelle NIC-Zuweisung der pfSense-VM prüfen:
+
+```powershell
+Get-VMNetworkAdapter -VMName "pfsense router" | Format-Table Name,SwitchName
+Get-VMNetworkAdapter -VMName "CaptureVM"       | Format-Table Name,SwitchName
+```
+
+LAN-Adapter auf `pcap-br` verschieben:
+
+```powershell
+$nic = Get-VMNetworkAdapter -VMName "pfsense router" | Where-Object Name -eq "LAN"
+Connect-VMNetworkAdapter -VMNetworkAdapter $nic -SwitchName "pcap-br"
+```
+
+Validierung:
+
+```powershell
+Get-VMNetworkAdapter -VMName "pfsense router" | Format-Table Name,SwitchName
+Get-VMNetworkAdapter -VMName "CaptureVM"       | Format-Table Name,SwitchName
+```
+
+Erwartung:
+
+| VM | Interface | SwitchName |
+| --- | --- | --- |
+| `pfsense router` | LAN | `pcap-br` |
+| `CaptureVM` | eth0 | `Firmennetzwerk` |
+| `CaptureVM` | eth1 | `pcap-br` |
+
+Anschließend auf der CaptureVM prüfen, ob Traffic über die Bridge fließt:
+
+```bash
+sudo tcpdump -i br0 -nn -c 20
+```
+
+Erwartung: Pakete aus dem LAN sind sichtbar (DHCP, ARP, DNS o. ä.).
+
+#### Notfall-Workaround: Bypass der Capture-VM
+
+Fällt die Capture-VM aus und muss die LAN-Konnektivität sofort wiederhergestellt werden (Hyper-V Host, PowerShell als Administrator):
+
+```powershell
+$nic = Get-VMNetworkAdapter -VMName "pfsense router" | Where-Object SwitchName -eq "pcap-br"
+Connect-VMNetworkAdapter -VMNetworkAdapter $nic -SwitchName "Firmennetzwerk"
+```
+
+Damit ist pfSense LAN direkt auf `Firmennetzwerk` zurückgeschaltet. Capture-Funktionalität entfällt bis zur Wiederherstellung der Bridge.
+
+#### 1.8 – NTP auf pfSense umstellen
 
 Testen ob Enforcement greift:
 
@@ -106,7 +236,7 @@ Testen ob Enforcement greift:
 timedatectl timesync-status
 ```
 
-[![timedatectl timesync-status](../images/img_75.png)](../images/img_75.png)
+[![timedatectl timesync-status ](../images/img_75.png)](../images/img_75.png)
 
 Analog zu Kapitel 05:
 
@@ -128,32 +258,27 @@ timedatectl timesync-status
 
 [![timedatectl timesync-status – capture-VM synchronisiert gegen pfSense](../images/img_76.png)](../images/img_76.png)
 
-#### 1.7 – DNS Enforcement prüfen
 
-Ubuntu 24.04 verwendet `systemd-resolved`. `/etc/resolv.conf` zeigt in diesem Setup den internen Stub-Resolver (`127.0.0.53`), nicht die echte DNS-IP. Die tatsächlich verwendeten DNS-Server prüfen:
+#### 1.9 – DNS Enforcement prüfen
 
 ```bash
 nslookup google.com 8.8.8.8
 nslookup google.com pfsense.example.internal
 ```
 
-[![DNS-Enforcement](../images/img_77.png)](../images/img_77.png)
+#### 1.10 – Pakete und Binaries herunterladen (vor Internet-Sperre)
 
-#### 1.8 – Pakete installieren (vor Internet-Sperre)
-
-Alle benötigten Pakete und Binaries **vor** dem Blockieren des Internet-Zugangs installieren:
+**Vor** dem Blockieren des Internet-Zugangs:
 
 ```bash
-sudo apt install -y tcpdump dnsutils nano
-
 wget https://github.com/prometheus/node_exporter/releases/download/v1.10.2/node_exporter-1.10.2.linux-amd64.tar.gz
 tar xvf node_exporter-1.10.2.linux-amd64.tar.gz
 sudo cp node_exporter-1.10.2.linux-amd64/node_exporter /usr/local/bin/
 ```
 
+[![DNS-Enforcement](../images/img_77.png)](../images/img_77.png)
 
-
-#### 1.9 – Node Exporter einrichten
+#### 1.11 – Node Exporter einrichten
 
 ```bash
 sudo nano /etc/systemd/system/node_exporter.service
@@ -186,7 +311,8 @@ sudo systemctl status node_exporter
 
 Erwartung: `Active: active (running)`
 
-#### 1.10 – Target in prometheus.yml ergänzen
+
+#### 1.12 – Target in prometheus.yml ergänzen
 
 Auf der Monitoring-VM (`192.168.10.20`):
 
@@ -206,8 +332,26 @@ sudo systemctl restart prometheus
 
 Funktionsnachweis: `http://192.168.10.20:9090/targets` → `192.168.10.21:9100` muss `State: UP` zeigen.
 
-[![Node Exportererreichbar](../images/img_78.png)](../images/img_78.png)
+[![Node Exporter – Metriken auf capture-VM erreichbar](../images/img_78.png)](../images/img_78.png)
 
-[![Grafana erreichbar](../images/img_79.png)](../images/img_79.png)
+#### 1.13 – Firewall-Regel: Internet-Zugang blockieren
 
-> Kurze Aktualisierung des Browserfensters ist ausreichend damit unter Nodename 'pcap' aufrufbar wird.
+**Firewall → Rules → LAN → ↑ Add**
+
+| Feld | Wert |
+| --- | --- |
+| Action | Block |
+| Interface | LAN |
+| Protocol | any |
+| Source | `192.168.10.21` |
+| Destination | `!192.168.10.0/24` |
+| Description | Block Capture-VM to Internet |
+
+[![pfSense: Firwall-Regel kopieren](../images/img_80.png)](../images/img_80.png)
+
+
+[![pfSense: Firwall-Regel anpassen](../images/img_81.png)](../images/img_81.png)
+
+Die Firewall-Regel entspricht der bereits in `07-monitoring.md` angelegten `Block Monitoring-VM to Internet`. Der Kopieren-Button kann genutzt werden; `Source-IP` und `Description` müssen angepasst werden.
+
+→ **Save** → **Apply Changes**
