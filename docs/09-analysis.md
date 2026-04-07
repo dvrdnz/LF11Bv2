@@ -494,6 +494,9 @@ Erster Funktionsnachweis nach VM-Start: Beide Panels zeigen ausschließlich den 
  
 [![Grafana – NTP Monitoring Dashboard nach knapp 24 Stunden Betrieb](../images/img_93.png)](../images/img_93.png)
  
+Positiver Wert → lokale Uhr geht vor (ist schneller als der NTP-Server)
+Negativer Wert → lokale Uhr geht nach (ist langsamer als der NTP-Server)
+
 Nach knapp 24 Stunden zeigt das `NTP Monitoring` Dashboard zwei komplementäre Perspektiven auf dieselbe Datenquelle. `NTP Drift (absolut)` (oben) visualisiert ausschließlich aktive Korrekturereignisse von `systemd-timesyncd` – Lücken bedeuten Stabilität, nicht fehlende Daten. `NTP Offset` (unten) zeigt die kontinuierliche Abweichung: der initiale Spike bei VM-Start ist der erste Sync, danach pendelt der Wert stabil um 0. Beide Panels zusammen belegen, dass pfSense als NTP-Quelle die AnalysisVM zuverlässig synchronisiert hält.
  
 ---
