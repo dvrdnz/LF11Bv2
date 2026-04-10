@@ -32,9 +32,7 @@ Mit dieser Architektur übernimmt die Capture-VM eine Rolle im kritischen Netzwe
 
 ---
 
-### Schritt 1 – Capture-VM anlegen
-
-#### 1.1 – VM erstellen (Hyper-V)
+### Schritt 1 – VM erstellen (Hyper-V)
 
 **Hyper-V Manager → Neu → Virtueller Computer**
 
@@ -59,7 +57,9 @@ Mit dieser Architektur übernimmt die Capture-VM eine Rolle im kritischen Netzwe
 
 Dieser vSwitch verbindet ausschließlich CaptureVM und pfSense. Er hat keinen Zugang zum physischen Netz.
 
-#### 1.2 – Basis-Setup
+---
+
+### Schritt 2 – Basis-Setup
 
 Nach der Installation:
 
@@ -70,7 +70,9 @@ sudo hostnamectl set-hostname pcap
 sudo apt install -y bridge-utils tcpdump dnsutils nano ethtool
 ```
 
-#### 1.3 – Bridge einrichten
+---
+
+### Schritt 3 – Bridge einrichten
 
 Persistente Konfiguration via netplan:
 
@@ -111,7 +113,9 @@ ip a show br0
 
 Erwartung: `inet 192.168.10.21/24` auf `br0` zugewiesen.
 
-#### 1.4 – Static Mapping in pfSense
+---
+
+### Schritt 4 – Static Mapping in pfSense
 
 Die Bridge bekommt eine eigene MAC-Adresse – nicht die von `eth0`. Daher erst nach `netplan apply` die MAC von `br0` ermitteln:
 
@@ -145,7 +149,9 @@ ip a show br0
 
 Erwartung: `inet 192.168.10.21/24` zugewiesen.
 
-#### 1.5 – Hyper-V Time Sync deaktivieren
+---
+
+### Schritt 5 – Hyper-V Time Sync deaktivieren
 
 Auf dem Hyper-V Host (PowerShell als Administrator):
 
@@ -161,7 +167,9 @@ Get-VMIntegrationService -VMName "CaptureVM" | Where-Object { $_.Name -like "*Ze
 
 Erwartung: `Enabled: False`
 
-#### 1.6 – MAC Address Spoofing aktivieren (Pflicht)
+---
+
+### Schritt 6 – MAC Address Spoofing aktivieren (Pflicht)
 
 Eine transparente Bridge leitet Frames mit fremden Quell-MACs weiter. Hyper-V verwirft solche Frames standardmäßig stillschweigend. MAC Address Spoofing muss auf allen beteiligten NICs aktiviert werden – ohne diese Einstellung fließt kein Traffic durch die Bridge.
 
@@ -172,11 +180,13 @@ Get-VMNetworkAdapter -VMName "CaptureVM" | Set-VMNetworkAdapter -MacAddressSpoof
 Set-VMNetworkAdapter -VMName "pfsense router" -Name "LAN" -MacAddressSpoofing On
 ```
 
-#### 1.7 – pfSense LAN-NIC auf pcap-br verschieben (Pflicht)
+---
+
+### Schritt 7 – pfSense LAN-NIC auf pcap-br verschieben
 
 Dieser Schritt ist der „Go-Live"-Moment: Erst danach fließt tatsächlicher Traffic durch die Bridge.
 
-> ⚠️ Während der Umstellung ist die pfSense LAN-Seite kurz nicht erreichbar. 
+> ⚠️ Während der Umstellung ist die pfSense LAN-Seite kurz nicht erreichbar.
 
 Auf dem Hyper-V Host (PowerShell als Administrator):
 
@@ -228,7 +238,9 @@ Connect-VMNetworkAdapter -VMNetworkAdapter $nic -SwitchName "Firmennetzwerk"
 
 Damit ist pfSense LAN direkt auf `Firmennetzwerk` zurückgeschaltet. Capture-Funktionalität entfällt bis zur Wiederherstellung der Bridge.
 
-#### 1.8 – NTP auf pfSense umstellen
+---
+
+### Schritt 8 – NTP auf pfSense umstellen
 
 Testen ob Enforcement greift:
 
@@ -238,7 +250,7 @@ timedatectl timesync-status
 
 [![timedatectl timesync-status ](../images/img_75.png)](../images/img_75.png)
 
-Analog zu Kapitel 05:
+Analog zu den anderen Kapiteln:
 
 ```bash
 sudo nano /etc/systemd/timesyncd.conf
@@ -258,15 +270,18 @@ timedatectl timesync-status
 
 [![timedatectl timesync-status – capture-VM synchronisiert gegen pfSense](../images/img_76.png)](../images/img_76.png)
 
+---
 
-#### 1.9 – DNS Enforcement prüfen
+### Schritt 9 – DNS Enforcement prüfen
 
 ```bash
 nslookup google.com 8.8.8.8
 nslookup google.com pfsense.example.internal
 ```
 
-#### 1.10 – Pakete und Binaries herunterladen (vor Internet-Sperre)
+---
+
+### Schritt 10 – Pakete und Binaries herunterladen (vor Internet-Sperre)
 
 **Vor** dem Blockieren des Internet-Zugangs:
 
@@ -278,7 +293,9 @@ sudo cp node_exporter-1.10.2.linux-amd64/node_exporter /usr/local/bin/
 
 [![DNS-Enforcement](../images/img_77.png)](../images/img_77.png)
 
-#### 1.11 – Node Exporter einrichten
+---
+
+### Schritt 11 – Node Exporter einrichten
 
 ```bash
 sudo nano /etc/systemd/system/node_exporter.service
@@ -311,8 +328,9 @@ sudo systemctl status node_exporter
 
 Erwartung: `Active: active (running)`
 
+---
 
-#### 1.12 – Target in prometheus.yml ergänzen
+### Schritt 12 – Target in prometheus.yml ergänzen
 
 Auf der Monitoring-VM (`192.168.10.20`):
 
@@ -334,7 +352,9 @@ Funktionsnachweis: `http://192.168.10.20:9090/targets` → `192.168.10.21:9100` 
 
 [![Node Exporter – Metriken auf capture-VM erreichbar](../images/img_78.png)](../images/img_78.png)
 
-#### 1.13 – Firewall-Regel: Internet-Zugang blockieren
+---
+
+### Schritt 13 – Firewall-Regel: Internet-Zugang blockieren
 
 **Firewall → Rules → LAN → ↑ Add**
 
@@ -349,7 +369,6 @@ Funktionsnachweis: `http://192.168.10.20:9090/targets` → `192.168.10.21:9100` 
 
 [![pfSense: Firwall-Regel kopieren](../images/img_80.png)](../images/img_80.png)
 
-
 [![pfSense: Firwall-Regel anpassen](../images/img_81.png)](../images/img_81.png)
 
 Die Firewall-Regel entspricht der bereits in `07-monitoring.md` angelegten `Block Monitoring-VM to Internet`. Der Kopieren-Button kann genutzt werden; `Source-IP` und `Description` müssen angepasst werden.
@@ -358,7 +377,7 @@ Die Firewall-Regel entspricht der bereits in `07-monitoring.md` angelegten `Bloc
 
 ---
 
-#### 1.14 – Gezielter Capture: DNS- und NTP-Policy
+### Schritt 14 – Gezielter Capture: DNS- und NTP-Policy
 
 Trigger: Firewall-Log zeigt geblockte Anfrage auf Port 53 oder 123 von einem LAN-Host.
 
@@ -432,8 +451,7 @@ sudo sed -i 's/NTP=pool.ntp.org/NTP=pfsense.example.internal/' /etc/systemd/time
 sudo systemctl restart systemd-timesyncd
 ```
 
-Das erzeugt authentischen `systemd-timesyncd`-Traffic — denselben Pfad den die VM im Normalbetrieb nutzt. pfSense blockiert den ausgehenden Request, tcpdump sieht Request ohne Response. `timedatectl timesync-status` zeigt `Packet count: 0` als Bestätigung dass keine Antwort ankam. 
-
+Das erzeugt authentischen `systemd-timesyncd`-Traffic — denselben Pfad den die VM im Normalbetrieb nutzt. pfSense blockiert den ausgehenden Request, tcpdump sieht Request ohne Response. `timedatectl timesync-status` zeigt `Packet count: 0` als Bestätigung dass keine Antwort ankam.
 
 [![NTP-Verstoß auf mint-machine provoziert; CaptureVM zeigt Requests ohne Response](../images/img_83.png)](../images/img_83.png)
 
@@ -441,7 +459,7 @@ Das erzeugt authentischen `systemd-timesyncd`-Traffic — denselben Pfad den die
 
 ---
 
-#### 1.15 – PCAP-Konvention
+### Schritt 15 – PCAP-Konvention
 
 Captures werden unter `~/captures/` abgelegt:
 
