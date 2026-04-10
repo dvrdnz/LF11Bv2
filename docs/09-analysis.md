@@ -15,14 +15,12 @@ Regel: Die AnalysisVM erzeugt Messtraffic. Sie speichert keine Daten – das ist
 | Rolle | VM | IP | Tools | Aufgabe |
 | --- | --- | --- | --- | --- |
 | MonitoringVM | `MonitoringVM` | `192.168.10.20` | Prometheus, Grafana, Node Exporter | Monitoring und Visualisierung |
-| CaptureVM | `CaptureVM` | `192.168.10.21` | tcpdump, bridge-utils, Node Exporter | Wire-Level-Debugging via Inline-Bridge |
+| CaptureVM | `CaptureVM` | `192.168.10.21` | tcpdump, bridge-utils, ethtool, Node Exporter | Wire-Level-Debugging via Inline-Bridge |
 | AnalysisVM | `AnalysisVM` | `192.168.10.22` | blackbox_exporter, Node Exporter | Aktiver Messpunkt, Baseline-Erzeugung |
 
 ---
 
-### Schritt 1 – Analysis-VM anlegen
-
-#### 1.1 – VM erstellen (Hyper-V)
+### Schritt 1 – VM erstellen (Hyper-V)
 
 **Hyper-V Manager → Neu → Virtueller Computer**
 
@@ -35,7 +33,9 @@ Regel: Die AnalysisVM erzeugt Messtraffic. Sie speichert keine Daten – das ist
 | Disk | 20 GB |
 | Netzwerkkarte | `Firmennetzwerk` |
 
-#### 1.2 – Basis-Setup
+---
+
+### Schritt 2 – Basis-Setup
 
 Nach der Installation:
 
@@ -46,7 +46,9 @@ sudo hostnamectl set-hostname analysis
 sudo apt install -y dnsutils nano ethtool curl jq
 ```
 
-#### 1.3 – Static Mapping in pfSense
+---
+
+### Schritt 3 – Static Mapping in pfSense
 
 MAC-Adresse ermitteln:
 
@@ -74,7 +76,9 @@ ip a show eth0
 
 Erwartung: `inet 192.168.10.22/24` zugewiesen.
 
-#### 1.4 – Hyper-V Time Sync deaktivieren
+---
+
+### Schritt 4 – Hyper-V Time Sync deaktivieren
 
 Auf dem Hyper-V Host (PowerShell als Administrator):
 
@@ -90,7 +94,9 @@ Get-VMIntegrationService -VMName "AnalysisVM" | Where-Object { $_.Name -like "*Z
 
 Erwartung: `Enabled: False`
 
-#### 1.5 – NTP auf pfSense umstellen
+---
+
+### Schritt 5 – NTP auf pfSense umstellen
 
 ```bash
 sudo nano /etc/systemd/timesyncd.conf
@@ -108,8 +114,18 @@ timedatectl timesync-status
 
 `Server: 192.168.10.2` und `Packet count` > 0 bestätigen erfolgreiche Synchronisation.
 
+---
 
-#### 1.7 – Binaries herunterladen (vor Internet-Sperre)
+### Schritt 6 – DNS Enforcement prüfen
+
+```bash
+nslookup google.com 8.8.8.8
+nslookup google.com pfsense.example.internal
+```
+
+---
+
+### Schritt 7 – Binaries herunterladen (vor Internet-Sperre)
 
 **Vor** dem Blockieren des Internet-Zugangs:
 
@@ -123,7 +139,9 @@ tar xvf node_exporter-1.10.2.linux-amd64.tar.gz
 sudo cp node_exporter-1.10.2.linux-amd64/node_exporter /usr/local/bin/
 ```
 
-#### 1.8 – blackbox_exporter konfigurieren
+---
+
+### Schritt 8 – blackbox_exporter konfigurieren
 
 ```bash
 sudo mkdir /etc/blackbox_exporter
@@ -179,7 +197,9 @@ sudo systemctl status blackbox_exporter
 
 Erwartung: `Active: active (running)`
 
-#### 1.9 – NTP-Offset als Prometheus-Metrik exportieren
+---
+
+### Schritt 9 – NTP-Offset als Prometheus-Metrik exportieren
 
 ```bash
 sudo mkdir -p /var/lib/node_exporter/textfile_collector
@@ -259,14 +279,15 @@ WantedBy=timers.target
 
 > `systemd-timesyncd` aktualisiert den Offset im Minimum alle 32 Sekunden. Der Timer ist darauf abgestimmt. `timedatectl timesync-status` wurde hier bewusst als Datenquelle gewählt – nicht wegen seiner Messqualität, sondern weil das Ziel dieses Kapitels die Infrastruktur war: ein Shell-Script das kontinuierlich läuft, ein systemd-Timer der es orchestriert, und ein funktionierender Pfad von Textfile über node_exporter nach Prometheus und Grafana. Eine zusätzliche Abhängigkeit hätte an dieser Stelle neue Fehlerquellen eingeführt, bevor der Grundpfad überhaupt validiert war.
 
-
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable ntp_offset.timer
 sudo systemctl start ntp_offset.timer
 ```
 
-#### 1.10 – Node Exporter einrichten
+---
+
+### Schritt 10 – Node Exporter einrichten
 
 ```bash
 sudo nano /etc/systemd/system/node_exporter.service
@@ -303,7 +324,9 @@ Erwartung: `ntp_offset_seconds` Eintrag sichtbar.
 
 [![node_exporter gibt ntp_offset_seconds korrekt aus](../images/img_85.png)](../images/img_85.png)
 
-#### 1.11 – Targets in prometheus.yml ergänzen
+---
+
+### Schritt 11 – Targets in prometheus.yml ergänzen
 
 Auf der MonitoringVM (`192.168.10.20`):
 
@@ -311,13 +334,13 @@ Auf der MonitoringVM (`192.168.10.20`):
 sudo nano /etc/prometheus/prometheus.yml
 ```
 
-Node Exporter Target ergänzen:
+Node Exporter Target unter `job_name: 'nodes'` ergänzen:
 
 ```yaml
         - 192.168.10.22:9100   # AnalysisVM
 ```
 
-Blackbox-Exporter Job ergänzen:
+Blackbox-Exporter Jobs ergänzen:
 
 ```yaml
   - job_name: 'blackbox'
@@ -353,7 +376,9 @@ Blackbox-Exporter Job ergänzen:
         replacement: 192.168.10.22:9115
 ```
 
-> Der blackbox_exporter läuft auf der AnalysisVM auf Port 9115. Prometheus fragt ihn nicht direkt ab – stattdessen übergibt Prometheus per relabel_configs das eigentliche Ziel als Parameter, und der blackbox_exporter führt die Messung stellvertretend durch. __address__ wird dabei umgeschrieben auf 192.168.10.22:9115, damit alle Probe-Requests über die AnalysisVM laufen.
+> Der blackbox_exporter läuft auf der AnalysisVM auf Port 9115. Prometheus fragt ihn nicht direkt ab – stattdessen übergibt Prometheus per relabel_configs das eigentliche Ziel als Parameter, und der blackbox_exporter führt die Messung stellvertretend durch. `__address__` wird dabei umgeschrieben auf `192.168.10.22:9115`, damit alle Probe-Requests über die AnalysisVM laufen.
+
+> Die Blackbox-Jobs erben `scrape_interval: 5s` aus dem globalen Block in `prometheus.yml`. Das bedeutet: ICMP-Probes gegen alle drei Targets und DNS-Probes gegen pfSense werden jeweils alle 5 Sekunden ausgeführt.
 
 [![prometheus.yml mit AnalysisVM-Targets und Blackbox-Jobs](../images/img_86.png)](../images/img_86.png)
 
@@ -365,7 +390,9 @@ Funktionsnachweis: `http://192.168.10.20:9090/targets` → alle AnalysisVM-Targe
 
 [![Prometheus Targets – AnalysisVM node_exporter, blackbox und blackbox_dns UP](../images/img_87.png)](../images/img_87.png)
 
-#### 1.12 – Firewall-Regel: Internet-Zugang blockieren
+---
+
+### Schritt 12 – Firewall-Regel: Internet-Zugang blockieren
 
 **Firewall → Rules → LAN → ↑ Add**
 
@@ -382,125 +409,126 @@ Die Firewall-Regel entspricht der bereits in `07-monitoring.md` angelegten `Bloc
 
 → **Save** → **Apply Changes**
 
+---
 
-#### 1.13 – Grafana Dashboard
- 
+### Schritt 13 – Grafana Dashboard
+
 In Grafana (`http://192.168.10.20:3000`) → Dashboards → New → Add visualization.
- 
+
 ##### Panel 1 – NTP Offset
- 
+
 Rechts unten auf **Code** umschalten, Query eingeben:
- 
+
 [![Grafana – Code-Editor mit Query für ntp_offset_seconds](../images/img_88.png)](../images/img_88.png)
- 
+
 ```promql
 ntp_offset_seconds{job="nodes"}
 ```
- 
+
 → **Run queries**
- 
+
 Rechte Sidebar:
 - **Title:** `NTP Offset`
 - **Standard options → Unit:** `milliseconds (ms)`
 - **Standard options → Min:** `0`
 - **Standard options → Max:** `0.01`
- 
+
 [![Grafana – Panel-Einstellungen NTP Offset mit fixierter Y-Achse](../images/img_89.png)](../images/img_89.png)
- 
+
 → **Save dashboard** → Title: `NTP Monitoring` → **Save**
- 
+
 [![Grafana – Dashboard als NTP Monitoring gespeichert](../images/img_90.png)](../images/img_90.png)
- 
+
 ---
- 
+
 ##### Panel 2 – NTP Drift (absolut)
- 
+
 Im Dashboard oben rechts → **Add → Visualization → prometheus**
- 
+
 Rechts unten auf **Code** umschalten, Query eingeben:
- 
+
 ```promql
 abs(ntp_offset_seconds{job="nodes"})
 ```
- 
+
 → **Run queries**
- 
+
 Rechte Sidebar:
 - **Title:** `NTP Drift (absolut)`
 - **Standard options → Unit:** `milliseconds (ms)`
 - **Standard options → Min:** `0`
 - **Standard options → Max:** `0.01`
- 
+
 [![Grafana – Panel NTP Drift (absolut) mit abs()-Query und fixierter Y-Achse](../images/img_91.png)](../images/img_91.png)
- 
+
 → **Save dashboard**
- 
+
 ---
- 
+
 ##### Panel 3 – DNS Response Time
- 
+
 Im Dashboard oben rechts → **Add → Visualization → prometheus**
- 
+
 Visualisierungstyp: **Time series**
- 
+
 Rechts unten auf **Code** umschalten, Query eingeben:
- 
+
 ```promql
 probe_duration_seconds{job="blackbox_dns"} * 1000
 ```
- 
+
 → **Run queries**
- 
+
 Rechte Sidebar:
 - **Title:** `DNS Response Time`
 - **Standard options → Unit:** `milliseconds (ms)`
- 
+
 → **Save dashboard**
- 
+
 ---
- 
+
 ##### Panel 4 – DNS Availability
- 
+
 Im Dashboard oben rechts → **Add → Visualization → prometheus**
- 
+
 Visualisierungstyp: **Gauge**
- 
+
 Rechts unten auf **Code** umschalten, Query eingeben:
- 
+
 ```promql
 probe_success{job="blackbox_dns"}
 ```
- 
+
 → **Run queries**
- 
+
 Rechte Sidebar:
 - **Title:** `DNS Availability`
 - **Standard options → Unit:** `short`
 - **Standard options → Min:** `0` / **Max:** `1`
 - **Value mappings:** `0 → Fehler`, `1 → OK`
 - **Thresholds:** `0` → rot, `1` → grün
- 
+
 → **Save dashboard** → Title: `DNS Monitoring` → **Save**
- 
+
 [![Grafana – Value Mappings für DNS Availability: 0 → Fehler, 1 → OK](../images/img_94.png)](../images/img_94.png)
- 
+
 [![Grafana – DNS Monitoring Dashboard: DNS Availability als Gauge zeigt OK, DNS Response Time als Zeitreihe mit Spikes bis 25ms](../images/img_95.png)](../images/img_95.png)
- 
+
 ---
- 
+
 [![Grafana – Erster Funktionsnachweis unmittelbar nach VM-Start: initialer Sync-Spike, danach stabil bei 0](../images/img_92.png)](../images/img_92.png)
- 
+
 Erster Funktionsnachweis nach VM-Start: Beide Panels zeigen ausschließlich den initialen Sync-Spike bei 04/05 00:00 – dem Zeitpunkt, an dem die AnalysisVM zum ersten Mal NTP-Kontakt zu pfSense aufnahm. Davor keine Daten, danach stabil bei 0.
- 
+
 [![Grafana – NTP Monitoring Dashboard nach knapp 24 Stunden Betrieb](../images/img_93.png)](../images/img_93.png)
  
 Positiver Wert → lokale Uhr geht vor (ist schneller als der NTP-Server)
 Negativer Wert → lokale Uhr geht nach (ist langsamer als der NTP-Server)
 
 Nach knapp 24 Stunden zeigt das `NTP Monitoring` Dashboard zwei komplementäre Perspektiven auf dieselbe Datenquelle. `NTP Drift (absolut)` (oben) visualisiert ausschließlich aktive Korrekturereignisse von `systemd-timesyncd` – Lücken bedeuten Stabilität, nicht fehlende Daten. `NTP Offset` (unten) zeigt die kontinuierliche Abweichung: der initiale Spike bei VM-Start ist der erste Sync, danach pendelt der Wert stabil um 0. Beide Panels zusammen belegen, dass pfSense als NTP-Quelle die AnalysisVM zuverlässig synchronisiert hält.
- 
+
 ---
- 
+
 ### Ausblick
- 
+
 Dieses Kapitel hat die Messmethode validiert, kein Präzisionsmesswerkzeug eingeführt. `timedatectl timesync-status` liefert ausreichend Daten um den Pfad – Script, Timer, Textfile, node_exporter, Prometheus, Grafana – end-to-end zu beweisen. Für belastbare Aussagen werden andere Tools benötigt.
