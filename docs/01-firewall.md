@@ -268,6 +268,8 @@ Die zugehörige Filter-Regel wird von pfSense automatisch angelegt.
 ![RDP Port-Forward Formular ausgefüllt](../images/img_17.png)
 
 
+> Hier wurde nur die Portweiterleitung dokumentiert, die Einrichtung von `xrdp` nicht. Es war hier eher ein Komfort-Feature und keine Notwendigkeit, daher fiel es vorerst nicht auf. Die vollständige Einrichtung und Einordnung von `xrdp` erfolgt in `10-tls-und_hardening.md` als definierte Admin-Schnittstelle. Dort ist die Einrichtung von `xrdp` in **Schritt 1** dokumentiert. Nur dieser Schritt bildet eine eigenständig nachvollziehbare technische Einheit und kann zur direkten Nachvollziehbarkeit vorgezogen werden.
+
 ---
 
 **Regelpersistenz:**
