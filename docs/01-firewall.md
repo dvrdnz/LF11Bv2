@@ -239,7 +239,7 @@ Firewall → Rules → LAN → **↑ Add**
 
 #### Schritt 6 – RDP-Portforward → 192.168.10.50
 
-**iptables:**
+Äquivalente iptables:
 ```bash
 iptables -t nat -A PREROUTING -p tcp --dport 3389 -j DNAT --to-destination 192.168.10.50:3389
 iptables -A FORWARD -p tcp -d 192.168.10.50 --dport 3389 -j ACCEPT
@@ -268,7 +268,98 @@ Die zugehörige Filter-Regel wird von pfSense automatisch angelegt.
 ![RDP Port-Forward Formular ausgefüllt](../images/img_17.png)
 
 
-> Hier wurde nur die Portweiterleitung dokumentiert, die Einrichtung von `xrdp` nicht. Es war hier eher ein Komfort-Feature und keine Notwendigkeit, daher fiel es vorerst nicht auf. Die vollständige Einrichtung und Einordnung von `xrdp` erfolgt in `10-tls-und_hardening.md` als definierte Admin-Schnittstelle. Dort ist die Einrichtung von `xrdp` in **Schritt 1** dokumentiert. Nur dieser Schritt bildet eine eigenständig nachvollziehbare technische Einheit und kann zur direkten Nachvollziehbarkeit vorgezogen werden.
+### 6.1 – XFCE und xrdp installieren
+ 
+```bash
+sudo apt install -y xrdp xfce4 xfce4-goodies
+```
+ 
+> `xrdp` allein liefert keinen Desktop. Ohne Desktop-Umgebung zeigt jede RDP-Verbindung nur einen schwarzen Bildschirm. <y>
+ 
+### 6.2 – XFCE als Session festlegen
+ 
+```bash
+echo xfce4-session > ~/.xsession
+chmod +x ~/.xsession
+```
+ 
+ 
+### 6.3 – Zugriff auf RDP-Benutzer einschränken
+ 
+```bash
+sudo groupadd rdpusers
+sudo usermod -aG rdpusers student
+```
+ 
+```bash
+sudo nano /etc/xrdp/sesman.ini
+```
+ 
+```ini
+TerminalServerUsers=rdpusers
+```
+ 
+> Nur Benutzer in der Gruppe `rdpusers` können sich per RDP anmelden.
+ 
+### 6.4 – xrdp Zugriff auf SSL-Zertifikat erlauben
+ 
+```bash
+sudo adduser xrdp ssl-cert
+```
+ 
+### 6.5 – Session-Auflösung in `startwm.sh` anpassen
+ 
+```bash
+sudo nano /etc/xrdp/startwm.sh
+```
+ 
+Die letzten Zeilen ersetzen durch:
+ 
+```bash
+# User-defined session
+if [ -r ~/.xsession ]; then
+  exec ~/.xsession
+fi
+ 
+# XFCE fallback
+if command -v xfce4-session >/dev/null 2>&1; then
+  exec xfce4-session
+fi
+ 
+# Default fallback
+test -x /etc/X11/Xsession && exec /etc/X11/Xsession
+exec /bin/sh /etc/X11/Xsession
+```
+ 
+### 6.6 – xrdp aktivieren und starten
+ 
+```bash
+sudo systemctl enable xrdp
+sudo systemctl restart xrdp
+sudo systemctl status xrdp
+```
+ 
+Erwartung: `Active: active (running)`
+
+
+### 7.7 – RDP zum Admin-Client
+
+Auf dem Hyper-V-Manager **pfsense router** markieren, sodass im unteren Panel die zum **R-LAB_Internet** zugeordnete IP-Adresse sichtbar wird.
+
+![IP-Adresse der Netzwerkarte](../images/img_96.png)
+
+WAN-IP ermitteln.
+
+```bash
+mstsc /v:10.100.xx.xx
+```
+
+Anmeldung mit `student`.
+
+
+![Anmeldungn ](../images/img_97.png)
+
+---
 
 ---
 
